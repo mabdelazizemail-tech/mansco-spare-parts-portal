@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, AlertCircle, CheckCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
@@ -406,5 +406,28 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="grid min-h-screen lg:grid-cols-2">
+        <div className="relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between" style={{ background: "linear-gradient(135deg, #0D0D0D 0%, #1a1a2e 40%, #16213e 70%, #0D0D0D 100%)" }}>
+          <div className="pointer-events-none absolute bottom-0 right-0 h-[60%] w-[60%] bg-gradient-to-tl from-[#00BFA6]/20 via-[#00BFA6]/5 to-transparent" />
+          <div className="pointer-events-none absolute top-0 left-0 h-[40%] w-[50%] bg-gradient-to-br from-[#00BFA6]/10 to-transparent" />
+        </div>
+        <div className="flex flex-col justify-center bg-[#0D0D0D] px-10 py-12">
+          <div className="mx-auto w-full max-w-sm">
+            <div className="animate-pulse space-y-4">
+              <div className="h-12 bg-white/10 rounded-lg" />
+              <div className="h-12 bg-white/10 rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
