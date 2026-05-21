@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__lovable__list_projects"
+    ]
+  }
+}

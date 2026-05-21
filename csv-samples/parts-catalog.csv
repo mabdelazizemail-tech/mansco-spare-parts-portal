@@ -1,0 +1,35 @@
+part_number,name_en,name_ar,category_id,model,oem,image_url
+PSA-4254.22,Front Brake Pad Set,طقم تيل فرامل أمامي,brakes,Peugeot 301,4254.22,/parts/brake-pad.jpg
+PSA-4249.34,Front Brake Disc,قرص فرامل أمامي,brakes,Peugeot 301,4249.34,/parts/brake-disc.jpg
+PSA-5271.E5,Front Shock Absorber,ممتص صدمات أمامي,brakes,Peugeot 2008,5271.E5,/parts/shock.jpg
+PSA-5040.R0,Rear Suspension Spring,ياي خلفي,brakes,Peugeot 3008,5040.R0,/parts/spring.jpg
+PSA-4254.68,Rear Brake Pad Set,طقم تيل فرامل خلفي,brakes,Peugeot 508,4254.68,/parts/brake-pad-rear.jpg
+PSA-1109.CK,Oil Filter,فلتر زيت,engine,Peugeot 301,1109.CK,/parts/oil-filter.jpg
+PSA-V861.7B,Timing Belt Kit,طقم سير كاتينة,engine,Peugeot 508,V861.7B,/parts/timing-belt.jpg
+PSA-1007.49,Cylinder Head Gasket,وجه راس سلندر,engine,Peugeot 208,1007.49,/parts/gasket.jpg
+PSA-5970.98,Spark Plug Set (4),طقم بوجيهات (4),engine,Peugeot 2008,5970.98,/parts/spark-plug.jpg
+PSA-1201.G9,Water Pump,طلمبة مياه,engine,Peugeot 3008,1201.G9,/parts/water-pump.jpg
+PSA-6216.E0,Headlight Assembly LH,كشاف أمامي يسار,electrical,Peugeot 301,6216.E0,/parts/headlight.jpg
+PSA-6351.HH,Tail Light Assembly RH,لمبة خلفية يمين,electrical,Peugeot 208,6351.HH,/parts/taillight.jpg
+PSA-5978.P0,Alternator,دينامو,electrical,Peugeot 508,5978.P0,/parts/alternator.jpg
+PSA-5983.F5,Starter Motor,مارش,electrical,Peugeot 2008,5983.F5,/parts/starter.jpg
+PSA-7104.GG,Front Bumper,اكصدام أمامي,body,Peugeot 301,7104.GG,/parts/bumper.jpg
+PSA-8231.PN,Side Mirror LH,مراية جانبية يسار,body,Peugeot 3008,8231.PN,/parts/mirror.jpg
+PSA-7111.LN,Front Grille,شبك أمامي,body,Peugeot 208,7111.LN,/parts/grille.jpg
+PSA-1444.TJ,Air Filter,فلتر هواء,filters,Peugeot 301,1444.TJ,/parts/air-filter.jpg
+PSA-9809.72,Cabin Filter,فلتر تكييف,filters,Peugeot 2008,9809.72,/parts/cabin-filter.jpg
+PSA-1906.E6,Fuel Filter,فلتر بنزين,filters,Peugeot 508,1906.E6,/parts/fuel-filter.jpg
+PSA-1330.Q1,Radiator,رادياتير,cooling,Peugeot 301,1330.Q1,/parts/radiator.jpg
+PSA-1336.X2,Thermostat,ثرموستات,cooling,Peugeot 2008,1336.X2,/parts/thermostat.jpg
+PSA-2150.CW,Clutch Kit,طقم دبرياج,transmission,Peugeot 301,2150.CW,/parts/clutch.jpg
+PSA-2313.H6,Gearbox Mount,حامل فتيس,transmission,Peugeot 508,2313.H6,/parts/gearbox-mount.jpg
+PSA-4048.L7,Tie Rod End,مقص توجيه,steering,Peugeot 301,4048.L7,/parts/tie-rod.jpg
+PSA-4062.R4,Power Steering Pump,طلمبة باور,steering,Peugeot 3008,4062.R4,/parts/ps-pump.jpg
+PSA-1731.AN,Catalytic Converter,محول حفاز,exhaust,Peugeot 301,1731.AN,/parts/catalytic.jpg
+PSA-1726.S4,Exhaust Muffler,شكمان,exhaust,Peugeot 208,1726.S4,/parts/muffler.jpg
+PSA-6438.JA,Wiper Blade Set,طقم مساحات,accessories,Peugeot 301,6438.JA,/parts/wipers.jpg
+PSA-1608.F9,Battery 70Ah,بطارية 70 أمبير,accessories,Peugeot 2008,1608.F9,/parts/battery.jpg
+PSA-3001.NW,Brake Master Cylinder,سلندر فرامل رئيسي,brakes,Peugeot 5008,3001.NW,/parts/master-cyl.jpg
+PSA-9700.AB,Door Handle Outer,يد باب خارجية,body,Peugeot Partner,9700.AB,/parts/door-handle.jpg
+PSA-1338.K2,Fan Belt,سير فان,cooling,Peugeot Expert,1338.K2,/parts/fan-belt.jpg
+PSA-6510.MN,Brake Light Switch,سويتش فرامل,electrical,Peugeot Boxer,6510.MN,/parts/brake-switch.jpg

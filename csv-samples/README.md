@@ -1,0 +1,87 @@
+# SAP CSV Sync — Sample Files
+
+These sample CSVs let you exercise the `/dashboard/admin/sync` upload page end-to-end without needing a live SAP export.
+
+## Files
+
+| File | File Type | Rows | What it tests |
+|---|---|---|---|
+| `parts-catalog.csv` | `parts_catalog` | 34 | Catalog import — adds 4 parts beyond the static catalog (Peugeot 5008, Partner, Expert, Boxer parts) |
+| `stock-availability.csv` | `stock` | 30 | All 4 availability states represented |
+| `pricing.csv` | `pricing` | 30 | Standard 2026 price list in EGP, with 2 items pre-discounted (5970.98 @ 5%, 2150.CW @ 10%) |
+| `stock-availability-with-errors.csv` | `stock` | 8 | Deliberately bad rows — tests per-row error reporting |
+
+## Recommended upload order
+
+Upload in this order so foreign-key-style references resolve:
+
+```
+1. parts-catalog.csv      → seeds the master catalog
+2. stock-availability.csv → adds live stock + ETAs
+3. pricing.csv            → adds prices (no-price rule still hides them on out-of-stock parts)
+```
+
+## What each row demonstrates (stock-availability.csv)
+
+| Part Number | qty | ETA | Resulting State | Price Shown? |
+|---|---|---|---|---|
+| `PSA-4254.22` | 48 | — | **AVAILABLE** | ✅ Yes |
+| `PSA-4249.34` | 12 | 2026-06-10 | **AVAILABLE** | ✅ Yes |
+| `PSA-5271.E5` | 0 | 2026-06-25 | **NOT_AVAILABLE_WITH_ETA** | ❌ Hidden |
+| `PSA-5040.R0` | 3 | 2026-06-18 | **AVAILABLE** (≥ qty 1) | ✅ Yes |
+| `PSA-V861.7B` | 0 | — | **NOT_AVAILABLE_NO_ETA** | ❌ Hidden |
+| `PSA-1201.G9` | 0 | 2026-06-30 | **NOT_AVAILABLE_WITH_ETA** | ❌ Hidden |
+| `PSA-6216.E0` | 1 | 2026-08-01 | **AVAILABLE** | ✅ Yes |
+| `PSA-5978.P0` | 0 | — | **NOT_AVAILABLE_NO_ETA** | ❌ Hidden |
+| `PSA-7111.LN` | 0 | — | **NOT_AVAILABLE_NO_ETA** | ❌ Hidden |
+| `PSA-1336.X2` | 0 | 2026-09-10 | **NOT_AVAILABLE_WITH_ETA** | ❌ Hidden |
+| `PSA-2313.H6` | 0 | — | **NOT_AVAILABLE_NO_ETA** | ❌ Hidden |
+| `PSA-4062.R4` | 0 | 2026-07-20 | **NOT_AVAILABLE_WITH_ETA** | ❌ Hidden |
+| `PSA-1731.AN` | 1 | 2026-08-15 | **AVAILABLE** | ✅ Yes |
+
+To trigger **PARTIALLY_AVAILABLE**, request a qty larger than what's in stock — e.g. `GET /api/parts/PSA-5040.R0?qty=5` against the stock row above (qty 3) returns `PARTIALLY_AVAILABLE`.
+
+## Error-handling test
+
+`stock-availability-with-errors.csv` contains 4 deliberately bad rows:
+
+| Row | Error |
+|---|---|
+| 3 | Missing `part_number` |
+| 4 | `quantity_available` is non-numeric (`not_a_number`) |
+| 5 | `replenishment_eta` is not a valid date (`not-a-date`) |
+| (rest) | Valid — will import successfully |
+
+Expected result on upload: **HTTP 207** with `records_processed: 4`, `records_failed: 3`, and `error_details` listing the row numbers and reasons. The good rows are still committed.
+
+## How to upload
+
+### Via the UI (recommended)
+
+1. Log in as an admin user
+2. Navigate to **SYSTEM → SAP CSV Sync** in the sidebar
+3. Pick the file type that matches your file (Stock / Pricing / Parts Catalog)
+4. Drag the CSV from `csv-samples/` into the drop zone
+5. Verify the column-validation panel shows no missing required columns
+6. Review the preview rows
+7. Click **Import to Portal**
+8. Watch the result panel and recent-sync history update
+
+### Via curl (for automation tests)
+
+```bash
+# Stock
+curl -X POST http://localhost:3000/api/sync/parts \
+  -H "Content-Type: application/json" \
+  -H "Cookie: <admin-session-cookie>" \
+  -d "{\"file_type\":\"stock\",\"file_name\":\"stock-availability.csv\",\"csv_content\":$(jq -Rs . < csv-samples/stock-availability.csv)}"
+```
+
+Replace `<admin-session-cookie>` with a real admin Supabase session cookie or use the `demo-admin=true` cookie for local development.
+
+## Notes on data realism
+
+- Part numbers (`PSA-*`) match the static `src/lib/catalog.ts` so once you import these CSVs, the Parts Inquiry page (`/dashboard/parts`) will show real stock + prices instead of mock data.
+- All prices are in EGP, plausible Egyptian market values for the listed parts.
+- Dates are forward-dated from 2026-05 so ETAs appear as "future" replenishments.
+- Two source locations are used (Cairo Main DC, Alexandria DC) — useful for verifying the `source_location` column flows through.
