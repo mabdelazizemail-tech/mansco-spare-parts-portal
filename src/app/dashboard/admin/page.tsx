@@ -68,15 +68,15 @@ function Tile({ label, value, trend, icon, accent = "bg-blue-100 text-blue-700" 
       <CardContent className="flex items-center gap-4 p-6">
         <div className={`rounded-lg p-3 ${accent}`}>{icon}</div>
         <div className="flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#6B6B6B]">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
             {label}
           </p>
           <div className="mt-1 flex items-end justify-between">
-            <p className="text-2xl font-bold text-[#000000]">{value}</p>
+            <p className="text-2xl font-bold text-white">{value}</p>
             {trend !== undefined && (
               <span
                 className={`flex items-center gap-0.5 text-xs font-semibold ${
-                  trend >= 0 ? "text-emerald-600" : "text-red-600"
+                  trend >= 0 ? "text-emerald-400" : "text-red-400"
                 }`}
               >
                 {trend >= 0 ? (
@@ -105,11 +105,11 @@ export default function AdminDashboardPage() {
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-[#000000]">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white">
           <Shield className="h-6 w-6 text-[#00A3E0]" />
           Admin Dashboard
         </h1>
-        <p className="mt-1 text-sm text-[#6B6B6B]">
+        <p className="mt-1 text-sm text-white/60">
           Network overview, exceptions, and operational KPIs.
         </p>
       </div>
