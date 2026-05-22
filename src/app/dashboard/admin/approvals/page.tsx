@@ -30,7 +30,6 @@ type OrderRow = {
   financial_block: boolean;
   financial_block_reason?: string;
   order_lines: { id: string }[];
-  dealers?: { id: string; code: string; company_name: string } | null;
 };
 
 const typeTone: Record<string, ToneColor> = { daily: "info", air_dhl: "warning", stock: "accent" };
@@ -201,7 +200,7 @@ export default function AdminApprovalsPage() {
                       {o.order_number}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 text-white/60 text-xs font-mono">{o.dealers?.company_name || o.dealers?.code || o.dealer_id}</td>
+                  <td className="px-5 py-3 text-white/60 text-xs font-mono">{o.dealer_id}</td>
                   <td className="px-5 py-3">
                     <StatusBadge tone={typeTone[o.order_type] ?? "muted"} label={typeLabel[o.order_type] ?? o.order_type} />
                   </td>

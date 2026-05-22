@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabaseAdmin
       .from("orders")
-      .select("*, order_lines(*), dealers(id, code, company_name)", { count: "exact" })
+      .select("*, order_lines(*)", { count: "exact" })
       .order("submitted_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
