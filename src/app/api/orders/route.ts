@@ -169,22 +169,49 @@ export async function POST(req: NextRequest) {
     let creditLimit = 0;
     let overdueBalance = 0;
     let financialStatus = "active";
-    let dealerCode = dealer_id; // Default to the ID passed in (could be code or UUID)
+    let dealerCode: string | null = null;
 
     try {
-      const { data: dealer } = await supabaseAdmin
+      // Try to look up dealer by ID (UUID) first
+      let dealerQuery = supabaseAdmin
         .from("dealers")
         .select("code, credit_limit, overdue_balance, financial_status")
-        .eq("id", dealer_id)
-        .maybeSingle();
+        .eq("id", dealer_id);
+
+      let { data: dealer, error } = await dealerQuery.maybeSingle();
+
+      // If not found by ID, try by code (for backward compatibility)
+      if (!dealer && !error) {
+        const { data: dealerByCode } = await supabaseAdmin
+          .from("dealers")
+          .select("code, credit_limit, overdue_balance, financial_status")
+          .eq("code", dealer_id)
+          .maybeSingle();
+        dealer = dealerByCode;
+      }
+
       if (dealer) {
-        dealerCode = dealer.code; // Use the dealer code for storage
+        dealerCode = dealer.code;
         creditLimit = dealer.credit_limit ?? 0;
         overdueBalance = dealer.overdue_balance ?? 0;
         financialStatus = dealer.financial_status ?? "active";
+      } else if (!dealerCode) {
+        // If we still don't have a dealer code, reject the request
+        return NextResponse.json(
+          { error: { code: "VALIDATION_ERROR", message: `Dealer ${dealer_id} not found` } },
+          { status: 400 }
+        );
       }
-    } catch {
-      // Non-fatal: proceed without financial data (demo mode)
+    } catch (e) {
+      // Non-fatal: proceed with whatever we have
+    }
+
+    // Ensure dealerCode is set before proceeding
+    if (!dealerCode) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid dealer ID" } },
+        { status: 400 }
+      );
     }
 
     const validation = validateOrderSubmission({
