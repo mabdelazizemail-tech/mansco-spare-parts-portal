@@ -481,7 +481,8 @@ export default function PartsInquiry() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {priceable ? (
+                      {(part.availability_state === "AVAILABLE" ||
+                        part.availability_state === "PARTIALLY_AVAILABLE") ? (
                         inCart ? (
                           /* Inline qty controls when item is already in cart.
                              Dealers can either tap +/- or type the qty directly
