@@ -644,7 +644,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const newOrder: Order = {
       id: `o${Date.now()}`,
       orderNumber: `ORD-2026-${String(orders.length + 200).padStart(4, "0")}`,
-      dealerId: dealer.id,
+      dealerId: dealer!.id,
       orderType: cartType,
       status: "submitted",
       submittedAt: new Date().toISOString(),
@@ -662,7 +662,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setOrders((prev) => [newOrder, ...prev]);
     setCart([]);
     return newOrder;
-  }, [cart, cartType, dealer?.id, orders.length]);
+  }, [cart, cartType, dealer, orders.length]);
 
   const approveOrder = useCallback((orderId: string) => {
     setOrders((prev) =>
