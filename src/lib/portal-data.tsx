@@ -639,6 +639,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const clearCart = useCallback(() => setCart([]), []);
 
   const submitOrder = useCallback(() => {
+    if (!dealer) throw new Error("Dealer not loaded");
     const totalAmount = cart.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
     const newOrder: Order = {
       id: `o${Date.now()}`,
@@ -661,7 +662,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setOrders((prev) => [newOrder, ...prev]);
     setCart([]);
     return newOrder;
-  }, [cart, cartType, dealer.id, orders.length]);
+  }, [cart, cartType, dealer?.id, orders.length]);
 
   const approveOrder = useCallback((orderId: string) => {
     setOrders((prev) =>

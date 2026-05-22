@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireDealerSession } from "@/lib/auth-guards";
 import {
   validateOrderSubmission,
   calculateEta,
@@ -14,20 +16,48 @@ export async function GET(req: NextRequest) {
   const status = sp.get("status");
   const type = sp.get("type");
   const q = sp.get("q");
-  const dealerId = sp.get("dealer_id");
+  const queryDealerId = sp.get("dealer_id");
   const limit = Math.min(Number(sp.get("limit")) || 50, 200);
   const offset = Number(sp.get("offset")) || 0;
-  // admin_view flag: when true, return all orders (for admin pages)
-  const adminView = sp.get("admin_view") === "true";
 
   try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+        { status: 401 }
+      );
+    }
+
+    const userRole = user.user_metadata?.role;
+    let dealerId: string | null = null;
+
+    // Admin can view any dealer's orders (optional parameter)
+    // Dealer can only view their own orders
+    if (userRole === "admin" || userRole === "super_admin") {
+      dealerId = queryDealerId; // May be null to view all
+    } else if (userRole === "dealer" || userRole === "sub_dealer") {
+      const dealerIdOrError = await requireDealerSession();
+      if (dealerIdOrError instanceof NextResponse) {
+        return dealerIdOrError;
+      }
+      dealerId = dealerIdOrError;
+    } else {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Access denied" } },
+        { status: 403 }
+      );
+    }
+
     let query = supabaseAdmin
       .from("orders")
       .select("*, order_lines(*)", { count: "exact" })
       .order("submitted_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (dealerId && !adminView) query = query.eq("dealer_id", dealerId);
+    if (dealerId) query = query.eq("dealer_id", dealerId);
     if (status && status !== "all") query = query.eq("status", status);
     if (type && type !== "all") query = query.eq("order_type", type);
     if (q) query = query.ilike("order_number", `%${q}%`);
@@ -53,6 +83,28 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+        { status: 401 }
+      );
+    }
+
+    const userRole = user.user_metadata?.role;
+    let authenticatedDealerId: string | null = null;
+
+    // Get authenticated dealer ID (dealers can only create for themselves)
+    if (userRole === "dealer" || userRole === "sub_dealer") {
+      const dealerIdOrError = await requireDealerSession();
+      if (dealerIdOrError instanceof NextResponse) {
+        return dealerIdOrError;
+      }
+      authenticatedDealerId = dealerIdOrError;
+    }
+
     const body = await req.json();
     const { dealer_id, order_type, items, notes } = body ?? {};
 
@@ -61,6 +113,30 @@ export async function POST(req: NextRequest) {
         { error: { code: "VALIDATION_ERROR", message: "dealer_id, order_type, and items[] are required" } },
         { status: 400 }
       );
+    }
+
+    // Dealers can only create orders for themselves; admins can create for any dealer
+    if (userRole !== "admin" && userRole !== "super_admin") {
+      if (authenticatedDealerId !== dealer_id) {
+        return NextResponse.json(
+          { error: { code: "FORBIDDEN", message: "Cannot create order for another dealer" } },
+          { status: 403 }
+        );
+      }
+    } else {
+      // Admin: validate dealer exists
+      const { data: dealerExists } = await supabaseAdmin
+        .from("dealers")
+        .select("id")
+        .eq("id", dealer_id)
+        .single();
+
+      if (!dealerExists) {
+        return NextResponse.json(
+          { error: { code: "VALIDATION_ERROR", message: "Invalid dealer_id" } },
+          { status: 400 }
+        );
+      }
     }
 
     if (!["daily", "air_dhl", "stock"].includes(order_type)) {

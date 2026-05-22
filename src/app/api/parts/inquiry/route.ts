@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireDealerSession } from "@/lib/auth-guards";
 import {
   buildPartSearchResult,
   type StockSnapshot,
@@ -25,6 +27,31 @@ import { categories } from "@/lib/catalog";
  */
 export async function POST(req: NextRequest) {
   try {
+    // Verify dealer authentication
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+        { status: 401 }
+      );
+    }
+
+    const userRole = user.user_metadata?.role;
+    if (userRole !== "dealer" && userRole !== "sub_dealer") {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Dealer access required" } },
+        { status: 403 }
+      );
+    }
+
+    // Get authenticated dealer ID
+    const authenticatedDealerIdOrError = await requireDealerSession();
+    if (authenticatedDealerIdOrError instanceof NextResponse) {
+      return authenticatedDealerIdOrError;
+    }
+
     const body = await req.json();
     const { dealer_id, part_number, quantity, inquiry_type } = body ?? {};
 
@@ -32,6 +59,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "dealer_id and part_number are required" } },
         { status: 400 }
+      );
+    }
+
+    // Verify dealer can only submit inquiries for themselves
+    if (authenticatedDealerIdOrError !== dealer_id) {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Cannot submit inquiry for another dealer" } },
+        { status: 403 }
       );
     }
     const qty = Math.max(1, Number(quantity) || 1);

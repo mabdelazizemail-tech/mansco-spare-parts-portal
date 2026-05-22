@@ -47,7 +47,6 @@ export async function PUT(
     // Only allow updating specific fields
     const allowedFields: Record<string, unknown> = {};
     const editable = [
-      "code",
       "company_name",
       "contact_person",
       "phone",

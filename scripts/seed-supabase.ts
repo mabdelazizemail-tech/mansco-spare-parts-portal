@@ -97,12 +97,6 @@ async function seed() {
     });
     console.log(`✅ Auth users ready\n`);
 
-    // Clear existing dealers (using code field to identify test dealers)
-    console.log("Clearing existing test dealers...");
-    for (const code of ["dlr-cairo", "dlr-delta", "dlr-alex"]) {
-      await supabase.from("dealers").delete().eq("code", code);
-    }
-
     // Update dealers with actual supabase_uids from auth
     const dealersWithAuthIds = seedData.dealers.map((dealer) => {
       const authUser = dealerUsers.find((u) => u.email === dealer.email);
@@ -112,39 +106,41 @@ async function seed() {
       };
     });
 
-    // Insert dealers
-    console.log("📍 Creating dealers...");
-    const { error: dealerError } = await supabase.from("dealers").insert(dealersWithAuthIds);
-    if (dealerError) {
-      console.error("❌ Error creating dealers:", dealerError);
-      return;
+    // Upsert dealers (update if exists, insert if not)
+    console.log("📍 Creating or updating dealers...");
+    for (const dealer of dealersWithAuthIds) {
+      const { error: upsertError } = await supabase
+        .from("dealers")
+        .upsert(dealer, { onConflict: "code" });
+      if (upsertError) {
+        console.error(`❌ Error upserting dealer ${dealer.code}:`, upsertError);
+        return;
+      }
     }
-    console.log(`✅ Created ${dealersWithAuthIds.length} dealers`);
+    console.log(`✅ Created or updated ${dealersWithAuthIds.length} dealers`);
 
-    // Clear existing test parts
-    console.log("Clearing existing test parts...");
-    const testPartNumbers = seedData.parts.map((p) => p.part_number);
-    for (const partNumber of testPartNumbers) {
-      await supabase.from("parts_catalog").delete().eq("part_number", partNumber);
+    // Upsert parts (update if exists, insert if not)
+    console.log("📦 Creating or updating parts...");
+    for (const part of seedData.parts) {
+      const { error: upsertError } = await supabase
+        .from("parts_catalog")
+        .upsert(
+          {
+            part_number: part.part_number,
+            name_en: part.name_en,
+            name_ar: part.name_ar,
+            category_id: part.category_id,
+            model: part.model,
+            oem: part.oem,
+          },
+          { onConflict: "part_number" }
+        );
+      if (upsertError) {
+        console.error(`❌ Error upserting part ${part.part_number}:`, upsertError);
+        return;
+      }
     }
-
-    // Insert parts
-    console.log("📦 Creating parts...");
-    const { error: partsError } = await supabase.from("parts_catalog").insert(
-      seedData.parts.map((p) => ({
-        part_number: p.part_number,
-        name_en: p.name_en,
-        name_ar: p.name_ar,
-        category_id: p.category_id,
-        model: p.model,
-        oem: p.oem,
-      }))
-    );
-    if (partsError) {
-      console.error("❌ Error creating parts:", partsError);
-      return;
-    }
-    console.log(`✅ Created ${seedData.parts.length} parts`);
+    console.log(`✅ Created or updated ${seedData.parts.length} parts`);
 
     // Get all parts for stock availability
     const { data: parts, error: partsSelectError } = await supabase.from("parts_catalog").select("part_number");
@@ -153,22 +149,27 @@ async function seed() {
       return;
     }
 
-    // Create stock availability for each part
-    console.log("📊 Creating stock availability...");
-    const stockRecords = parts.map((part) => ({
-      part_number: part.part_number,
-      quantity_available: Math.floor(Math.random() * 100) + 10,
-      quantity_atp: Math.floor(Math.random() * 100) + 10,
-      source_location: "Cairo Warehouse",
-      replenishment_eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    }));
-
-    const { error: stockError } = await supabase.from("stock_availability").insert(stockRecords);
-    if (stockError) {
-      console.error("❌ Error creating stock availability:", stockError);
-      return;
+    // Upsert stock availability for each part
+    console.log("📊 Creating or updating stock availability...");
+    for (const part of parts) {
+      const { error: stockError } = await supabase
+        .from("stock_availability")
+        .upsert(
+          {
+            part_number: part.part_number,
+            quantity_available: Math.floor(Math.random() * 100) + 10,
+            quantity_atp: Math.floor(Math.random() * 100) + 10,
+            source_location: "Cairo Warehouse",
+            replenishment_eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          },
+          { onConflict: "part_number" }
+        );
+      if (stockError) {
+        console.error(`❌ Error upserting stock for part ${part.part_number}:`, stockError);
+        return;
+      }
     }
-    console.log(`✅ Created stock records for all parts`);
+    console.log(`✅ Created or updated stock records for ${parts.length} parts`);
 
     console.log("\n" + "=".repeat(60));
     console.log("🎉 DATABASE SEED COMPLETE!");
