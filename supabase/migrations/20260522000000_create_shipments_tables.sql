@@ -1,6 +1,6 @@
 -- supabase/migrations/20260522000000_create_shipments_tables.sql
 
--- Create shipments table
+-- Shipment tracking with carrier and delivery details
 CREATE TABLE shipments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
@@ -16,6 +16,7 @@ CREATE TABLE shipments (
   ship_date DATE,
   eta_delivery DATE,
   actual_delivery_date DATE,
+  -- manual: user-created; auto_invoice: auto-generated from invoice
   shipment_type TEXT NOT NULL DEFAULT 'manual' CHECK (shipment_type IN ('manual', 'auto_invoice')),
   notes TEXT,
   created_by UUID NOT NULL REFERENCES auth.users(id),
@@ -23,16 +24,17 @@ CREATE TABLE shipments (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_by UUID NOT NULL REFERENCES auth.users(id),
 
+  -- Require at least one tracking identifier
   CONSTRAINT tracking_ref_required CHECK (
     tracking_number IS NOT NULL OR awb_number IS NOT NULL OR dhl_reference IS NOT NULL
   )
 );
 
--- Create shipment_lines table
+-- Line-level fulfillment tracking within a shipment
 CREATE TABLE shipment_lines (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   shipment_id UUID NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
-  order_line_id UUID NOT NULL,
+  order_line_id UUID NOT NULL REFERENCES order_lines(id) ON DELETE RESTRICT,
   shipped_qty INTEGER NOT NULL CHECK (shipped_qty > 0),
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
@@ -61,12 +63,6 @@ CREATE POLICY "dealers_view_own_shipments" ON shipments
     )))
   );
 
-CREATE POLICY "admins_view_all_shipments" ON shipments
-  FOR SELECT USING (
-    (auth.jwt() ->> 'role' = 'admin') OR
-    (auth.jwt() ->> 'role' = 'super_admin')
-  );
-
 CREATE POLICY "users_create_shipments" ON shipments
   FOR INSERT WITH CHECK (created_by = auth.uid());
 
@@ -85,3 +81,18 @@ CREATE POLICY "view_shipment_lines" ON shipment_lines
 
 CREATE POLICY "create_shipment_lines" ON shipment_lines
   FOR INSERT WITH CHECK (shipment_id IN (SELECT id FROM shipments));
+
+-- Trigger to auto-update timestamp and user on updates
+CREATE OR REPLACE FUNCTION update_shipments_audit()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  NEW.updated_by = auth.uid();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER shipments_update_audit
+  BEFORE UPDATE ON shipments
+  FOR EACH ROW
+  EXECUTE FUNCTION update_shipments_audit();
