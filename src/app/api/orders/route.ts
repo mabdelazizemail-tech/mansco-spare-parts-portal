@@ -169,14 +169,16 @@ export async function POST(req: NextRequest) {
     let creditLimit = 0;
     let overdueBalance = 0;
     let financialStatus = "active";
+    let dealerCode = dealer_id; // Default to the ID passed in (could be code or UUID)
 
     try {
       const { data: dealer } = await supabaseAdmin
         .from("dealers")
-        .select("credit_limit, overdue_balance, financial_status")
+        .select("code, credit_limit, overdue_balance, financial_status")
         .eq("id", dealer_id)
         .maybeSingle();
       if (dealer) {
+        dealerCode = dealer.code; // Use the dealer code for storage
         creditLimit = dealer.credit_limit ?? 0;
         overdueBalance = dealer.overdue_balance ?? 0;
         financialStatus = dealer.financial_status ?? "active";
@@ -206,7 +208,7 @@ export async function POST(req: NextRequest) {
       .from("orders")
       .insert({
         order_number: orderNum,
-        dealer_id,
+        dealer_id: dealerCode,
         order_type,
         status: validation.initialStatus,
         subtotal,
