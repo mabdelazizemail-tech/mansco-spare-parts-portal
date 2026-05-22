@@ -1,21 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth-guards";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+/**
+ * Soft-deletes a dealer. Requires the caller to retype the dealer's
+ * company_name in the request body as a confirmation guard against accidental
+ * deletes. Sets deleted_at + deleted_by and revokes portal access via the
+ * Supabase user_metadata flag.
+ *
+ * Note: existing orders, invoices, and shipments remain intact and untouched.
+ * To restore a deleted dealer, an admin can reset deleted_at to NULL.
+ */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = await requireAdmin();
-  if (unauthorized) return unauthorized;
+  // Inline admin check so we can also keep a reference to the actor's UID
+  // for the deleted_by audit field.
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+      { status: 401 }
+    );
+  }
+
+  const role = user.user_metadata?.role;
+  if (role !== "admin" && role !== "super_admin") {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Admin access required" } },
+      { status: 403 }
+    );
+  }
 
   const { id } = await params;
 
+  let body: { confirm_company_name?: string } = {};
   try {
-    // 1. Get the dealer record to find supabase_uid
+    body = await req.json();
+  } catch {
+    // Empty body — confirm_company_name will be undefined and we'll reject below.
+  }
+  const confirm = (body.confirm_company_name ?? "").trim();
+
+  try {
+    // 1. Load the dealer to verify it exists and to read company_name for the
+    //    confirmation check.
     const { data: dealer, error: fetchError } = await supabaseAdmin
       .from("dealers")
-      .select("id, supabase_uid, company_name")
+      .select("id, supabase_uid, company_name, deleted_at")
       .eq("id", id)
       .single();
 
@@ -26,12 +63,42 @@ export async function POST(
       );
     }
 
-    // 2. Soft delete: mark as inactive (deactivated)
+    if (dealer.deleted_at) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "ALREADY_DELETED",
+            message: "This dealer has already been deleted",
+          },
+        },
+        { status: 409 }
+      );
+    }
+
+    // 2. Confirmation guard: caller must type the dealer's company name.
+    if (confirm.toLowerCase() !== dealer.company_name.toLowerCase()) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CONFIRMATION_MISMATCH",
+            message:
+              "Confirmation does not match dealer company name. Type the company name exactly to confirm deletion.",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Soft-delete: set deleted_at and deleted_by. Leave is_active alone —
+    //    that field continues to represent the suspend/active toggle, which
+    //    is a separate concern.
+    const nowIso = new Date().toISOString();
     const { error: updateError } = await supabaseAdmin
       .from("dealers")
       .update({
-        is_active: false,
-        updated_at: new Date().toISOString(),
+        deleted_at: nowIso,
+        deleted_by: user.id,
+        updated_at: nowIso,
       })
       .eq("id", id);
 
@@ -42,7 +109,7 @@ export async function POST(
       );
     }
 
-    // 3. Update Supabase Auth user_metadata to block access
+    // 4. Revoke portal access at the auth layer so the dealer can't sign back in.
     if (dealer.supabase_uid) {
       await supabaseAdmin.auth.admin.updateUserById(dealer.supabase_uid, {
         user_metadata: {
@@ -52,7 +119,11 @@ export async function POST(
     }
 
     return NextResponse.json({
-      data: { message: `${dealer.company_name} has been deleted`, dealer_id: id },
+      data: {
+        message: `${dealer.company_name} has been deleted`,
+        dealer_id: id,
+        deleted_at: nowIso,
+      },
     });
   } catch {
     return NextResponse.json(

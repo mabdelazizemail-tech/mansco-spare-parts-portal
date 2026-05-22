@@ -30,6 +30,7 @@ import {
   ArrowDownCircle,
   Plus,
   Minus,
+  Trash2,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import {
@@ -69,6 +70,8 @@ type Dealer = {
   is_active: boolean;
   created_at: string;
   updated_at?: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
 };
 
 const statusStyles: Record<string, string> = {
@@ -950,6 +953,141 @@ function CreditManagementModal({
   );
 }
 
+// ── Delete Confirmation Modal ──────────────────────────────────────────
+function DealerDeleteModal({
+  dealer,
+  onClose,
+  onDeleted,
+}: {
+  dealer: Dealer;
+  onClose: () => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  const matches =
+    confirmText.trim().toLowerCase() === dealer.company_name.toLowerCase();
+
+  const handleDelete = async () => {
+    if (!matches) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/dealers/${dealer.id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm_company_name: confirmText.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error?.message || "Failed to delete dealer");
+      }
+      onDeleted(dealer.id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to delete dealer");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-50 w-full max-w-md rounded-xl border border-red-500/30 bg-[#111111] shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-red-500/10 p-2">
+              <Trash2 className="h-5 w-5 text-red-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Delete Dealer</h2>
+              <p className="text-xs text-white/40">This action removes portal access</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-white/40 transition hover:bg-[#2A2A2A] hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="space-y-4 px-6 py-5">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-red-400 leading-relaxed">
+                You are about to delete{" "}
+                <span className="font-bold">{dealer.company_name}</span>
+                {dealer.code && (
+                  <span className="font-mono"> ({dealer.code})</span>
+                )}
+                . The dealer will be hidden from the directory and will lose
+                portal access. Existing orders, invoices, and shipments remain
+                intact. This can be reversed by an admin.
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium text-white/50">
+              Type{" "}
+              <span className="font-mono text-white">{dealer.company_name}</span>{" "}
+              to confirm
+            </Label>
+            <input
+              autoFocus
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={dealer.company_name}
+              className="mt-1.5 h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 text-sm text-white placeholder:text-white/20 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/30"
+              disabled={deleting}
+            />
+            {confirmText.length > 0 && !matches && (
+              <p className="mt-1.5 text-[11px] text-red-400/80">
+                Doesn&apos;t match yet — type the company name exactly.
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 border-t border-[#2A2A2A] bg-[#0D0D0D] px-6 py-4 rounded-b-xl">
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2 text-xs font-semibold text-white/60 transition hover:border-[#3A3A3A] hover:text-white disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={!matches || deleting}
+            className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {deleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Delete Dealer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────
 export default function AdminDealersPage() {
   const { t } = useTranslation();
@@ -966,6 +1104,7 @@ export default function AdminDealersPage() {
   const [previewDealer, setPreviewDealer] = useState<Dealer | null>(null);
   const [editDealer, setEditDealer] = useState<Dealer | null>(null);
   const [creditDealer, setCreditDealer] = useState<Dealer | null>(null);
+  const [deleteDealer, setDeleteDealer] = useState<Dealer | null>(null);
   const [suspendingId, setSuspendingId] = useState<string | null>(null);
 
   const fetchDealers = useCallback(async () => {
@@ -1023,6 +1162,16 @@ export default function AdminDealersPage() {
     } finally {
       setSuspendingId(null);
     }
+  };
+
+  // Remove a soft-deleted dealer from the in-memory list and close any
+  // open panels showing that dealer.
+  const handleDeleted = (deletedId: string) => {
+    setDealers((prev) => prev.filter((d) => d.id !== deletedId));
+    setDeleteDealer(null);
+    if (previewDealer?.id === deletedId) setPreviewDealer(null);
+    if (editDealer?.id === deletedId) setEditDealer(null);
+    if (creditDealer?.id === deletedId) setCreditDealer(null);
   };
 
   const filtered = dealers.filter((d) => {
@@ -1562,6 +1711,15 @@ export default function AdminDealersPage() {
                                 <CheckCircle2 className="h-4 w-4" />
                               )}
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                              onClick={() => setDeleteDealer(d)}
+                              title="Delete dealer record"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1600,6 +1758,15 @@ export default function AdminDealersPage() {
           dealer={creditDealer}
           onClose={() => setCreditDealer(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteDealer && (
+        <DealerDeleteModal
+          dealer={deleteDealer}
+          onClose={() => setDeleteDealer(null)}
+          onDeleted={handleDeleted}
         />
       )}
     </div>
