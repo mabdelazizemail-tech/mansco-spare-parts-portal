@@ -1,0 +1,406 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// ── Auth & Dealer Management ──
+
+model DealerRegistration {
+  id                            String   @id @default(uuid()) @db.Uuid
+  supabaseUid                   String   @unique @db.Uuid
+  email                         String   @unique
+  companyName                   String
+  contactPerson                 String
+  phone                         String
+  taxId                         String
+  commercialRegisterNumber      String
+  branchAddress                 String
+  dealerTypeRequested           String   @db.VarChar(50)
+  parentDealerCode              String?
+  documentsUploaded             Json?
+  reviewStatus                  String   @default("pending") @db.VarChar(50)
+  rejectionReason               String?
+  reviewedBy                    String?  @db.Uuid
+  reviewedAt                    DateTime?
+  submittedAt                   DateTime @default(now())
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@map("dealer_registrations")
+}
+
+model Dealer {
+  id                    String   @id @default(uuid()) @db.Uuid
+  supabaseUid           String   @unique @db.Uuid
+  code                  String   @unique
+  email                 String   @unique
+  companyName           String
+  contactPerson         String
+  phone                 String
+  taxId                 String
+  branchAddress         String
+  dealerType            String   @db.VarChar(50)
+  parentDealerCode      String?
+  creditLimit           Decimal  @db.Numeric(12, 2)
+  overdueBalance        Decimal  @default(0) @db.Numeric(12, 2)
+  financialStatus       String   @default("active") @db.VarChar(50)
+  registrationStatus    String   @default("pending") @db.VarChar(50)
+  approvedBy            String?  @db.Uuid
+  approvedAt            DateTime?
+  isActive              Boolean  @default(true)
+  deletedAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  orders                Order[]
+  inquiries             Inquiry[]
+  lostSales             LostSale[]
+  permissions           DealerPermission?
+  targets               DealerTarget[]
+
+  @@map("dealers")
+}
+
+model DealerPermission {
+  id                    String   @id @default(uuid()) @db.Uuid
+  dealerId              String   @unique @db.Uuid
+  dealer                Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  allowedCategories     String[]
+  stockVisibilityScope  String?
+  priceListId           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("dealer_permissions")
+}
+
+// ── Parts & Catalog ──
+
+model Part {
+  id                    String   @id @default(uuid()) @db.Uuid
+  partNumber            String   @unique
+  nameEn                String
+  nameAr                String?
+  categoryId            String?
+  model                 String?
+  oem                   String?
+  imageUrl              String?
+  lastSyncedAt          DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  stockAvailability     StockAvailability?
+  priceListItems        PriceListItem[]
+  inquiries             Inquiry[]
+  lostSales             LostSale[]
+  campaignItems         CampaignItem[]
+
+  @@map("parts_catalog")
+}
+
+model StockAvailability {
+  id                    String   @id @default(uuid()) @db.Uuid
+  partId                String   @unique @db.Uuid
+  partNumber            String   @unique
+  part                  Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  quantityAvailable     Int      @default(0)
+  quantityAtp           Int      @default(0)
+  sourceLocation        String?
+  replenishmentEta      DateTime?
+  lastSyncedAt          DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("stock_availability")
+}
+
+model PriceList {
+  id                    String   @id @default(uuid()) @db.Uuid
+  name                  String
+  effectiveFrom         DateTime
+  effectiveTo           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  items                 PriceListItem[]
+
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id                    String   @id @default(uuid()) @db.Uuid
+  priceListId           String   @db.Uuid
+  priceList             PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  partId                String   @db.Uuid
+  part                  Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  partNumber            String
+  unitPrice             Decimal  @db.Numeric(12, 2)
+  discountPct           Decimal  @default(0) @db.Numeric(5, 2)
+  currency              String   @default("EGP")
+  effectiveFrom         DateTime?
+  effectiveTo           DateTime?
+  lastSyncedAt          DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([priceListId, partNumber])
+  @@map("price_list_items")
+}
+
+// ── Orders & Fulfillment ──
+
+model Order {
+  id                      String   @id @default(uuid()) @db.Uuid
+  orderNumber             String   @unique
+  dealerId                String   @db.Uuid
+  dealer                  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  orderType               String   @db.VarChar(50)
+  status                  String   @default("submitted") @db.VarChar(50)
+  creditLimitAtOrder      Decimal  @db.Numeric(12, 2)
+  overdueBalanceAtOrder   Decimal  @db.Numeric(12, 2)
+  financialBlock          Boolean  @default(false)
+  financialBlockReason    String?
+  subtotal                Decimal  @db.Numeric(12, 2)
+  vatAmount               Decimal  @db.Numeric(12, 2)
+  totalAmount             Decimal  @db.Numeric(12, 2)
+  approvedAt              DateTime?
+  approvedBy              String?  @db.Uuid
+  rejectedAt              DateTime?
+  rejectedBy              String?  @db.Uuid
+  rejectionReason         String?
+  invoiceNumber           String?
+  invoiceDate             DateTime?
+  invoicedBy              String?  @db.Uuid
+  trackingNumber          String?
+  carrier                 String?
+  etaCalculated           DateTime?
+  etaActual               DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  lines                   OrderLine[]
+  approvals               OrderApproval[]
+  timeline                OrderTimeline[]
+
+  @@index([dealerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderLine {
+  id                      String   @id @default(uuid()) @db.Uuid
+  orderId                 String   @db.Uuid
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  partNumber              String
+  partName                String
+  partNameAr              String?
+  quantityRequested       Int
+  quantityConfirmed       Int      @default(0)
+  quantityBackordered     Int      @default(0)
+  unitPrice               Decimal  @db.Numeric(12, 2)
+  lineTotal               Decimal  @db.Numeric(12, 2)
+  lineStatus              String   @default("pending") @db.VarChar(50)
+  availabilityAtOrder     String?
+  backordeEta             DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([orderId])
+  @@map("order_lines")
+}
+
+model OrderApproval {
+  id                      String   @id @default(uuid()) @db.Uuid
+  orderId                 String   @db.Uuid
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reviewerId              String   @db.Uuid
+  action                  String   @db.VarChar(50)
+  notes                   String?
+  decidedAt               DateTime @default(now())
+  createdAt               DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_approvals")
+}
+
+model OrderTimeline {
+  id                      String   @id @default(uuid()) @db.Uuid
+  orderId                 String   @db.Uuid
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  event                   String
+  status                  String?
+  actor                   String?
+  notes                   String?
+  createdAt               DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_timeline")
+}
+
+// ── Inquiries & Lost Sales ──
+
+model Inquiry {
+  id                      String   @id @default(uuid()) @db.Uuid
+  dealerId                String   @db.Uuid
+  dealer                  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  partNumber              String
+  part                    Part?    @relation(fields: [partNumber], references: [partNumber], onDelete: SetNull)
+  quantity                Int      @default(1)
+  inquiryType             String   @default("search") @db.VarChar(50)
+  message                 String?
+  availabilityAtInquiry   String?
+  status                  String   @default("open") @db.VarChar(50)
+  convertedToOrderId      String?  @db.Uuid
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  lostSales               LostSale[]
+
+  @@index([dealerId])
+  @@index([status])
+  @@map("inquiries")
+}
+
+model LostSale {
+  id                      String   @id @default(uuid()) @db.Uuid
+  inquiryId               String?  @db.Uuid
+  inquiry                 Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+  dealerId                String   @db.Uuid
+  dealer                  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  partNumber              String
+  part                    Part?    @relation(fields: [partNumber], references: [partNumber], onDelete: SetNull)
+  quantity                Int      @default(1)
+  reason                  String   @db.VarChar(100)
+  estimatedValue          Decimal  @db.Numeric(12, 2)
+  etaIfAvailable          DateTime?
+  customerName            String?
+  createdAt               DateTime @default(now())
+
+  @@index([dealerId])
+  @@index([reason])
+  @@map("lost_sales")
+}
+
+// ── Campaigns ──
+
+model Campaign {
+  id                      String   @id @default(uuid()) @db.Uuid
+  name                    String
+  description             String?
+  campaignType            String   @db.VarChar(50)
+  status                  String   @default("draft") @db.VarChar(50)
+  startDate               DateTime
+  endDate                 DateTime?
+  targetAudience          String   @default("all") @db.VarChar(50)
+  targetDealerIds         String[]
+  targetDealerGroup       String?
+  eligibilityRules        Json?
+  createdBy               String   @db.Uuid
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  items                   CampaignItem[]
+  orders                  CampaignOrder[]
+  auditLog                CampaignAuditLog[]
+
+  @@index([status])
+  @@map("campaigns")
+}
+
+model CampaignItem {
+  id                      String   @id @default(uuid()) @db.Uuid
+  campaignId              String   @db.Uuid
+  campaign                Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  partId                  String   @db.Uuid
+  part                    Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  partNumber              String
+  partDescription         String?
+  discountType            String   @db.VarChar(50)
+  discountValue           Decimal  @db.Numeric(10, 2)
+  minOrderQuantity        Int      @default(1)
+  orderTypeRestriction    String[]
+  totalInquiries          Int      @default(0)
+  totalOrders             Int      @default(0)
+  totalQtySold            Int      @default(0)
+  totalDiscountGiven      Decimal  @default(0) @db.Numeric(12, 2)
+  totalBackorders         Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  orders                  CampaignOrder[]
+
+  @@unique([campaignId, partNumber])
+  @@map("campaign_items")
+}
+
+model CampaignOrder {
+  id                      String   @id @default(uuid()) @db.Uuid
+  campaignId              String   @db.Uuid
+  campaign                Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignItemId          String   @db.Uuid
+  campaignItem            CampaignItem @relation(fields: [campaignItemId], references: [id], onDelete: Cascade)
+  dealerId                String   @db.Uuid
+  orderId                 String?  @db.Uuid
+  partNumber              String
+  quantity                Int
+  discountApplied         Decimal  @db.Numeric(12, 2)
+  isFirstPurchase         Boolean  @default(false)
+  createdAt               DateTime @default(now())
+
+  @@map("campaign_orders")
+}
+
+model CampaignAuditLog {
+  id                      String   @id @default(uuid()) @db.Uuid
+  campaignId              String   @db.Uuid
+  campaign                Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  action                  String
+  details                 Json?
+  performedBy             String   @db.Uuid
+  createdAt               DateTime @default(now())
+
+  @@map("campaign_audit_log")
+}
+
+// ── Targets ──
+
+model DealerTarget {
+  id                      String   @id @default(uuid()) @db.Uuid
+  dealerId                String   @db.Uuid
+  dealer                  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  period                  String
+  targetAmount            Decimal  @db.Numeric(12, 2)
+  achievedAmount          Decimal  @default(0) @db.Numeric(12, 2)
+  kpiMetrics              Json?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([dealerId])
+  @@map("dealer_targets")
+}
+
+// ── SAP Sync ──
+
+model SyncLog {
+  id                      String   @id @default(uuid()) @db.Uuid
+  syncType                String   @db.VarChar(50)
+  fileType                String   @db.VarChar(50)
+  fileName                String
+  status                  String   @default("running") @db.VarChar(50)
+  recordsProcessed        Int      @default(0)
+  recordsFailed           Int      @default(0)
+  errorDetails            Json?
+  startedAt               DateTime @default(now())
+  completedAt             DateTime?
+  createdAt               DateTime @default(now())
+
+  @@map("sync_logs")
+}

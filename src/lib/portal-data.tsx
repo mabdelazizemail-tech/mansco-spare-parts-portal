@@ -491,23 +491,126 @@ const PortalContext = createContext<PortalContextValue | null>(null);
 
 export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>("dealer");
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      const userRole = user?.user_metadata?.role as string | undefined;
-      if (userRole === "admin" || userRole === "super_admin") {
-        setRole("admin");
-      } else {
-        setRole("dealer");
-      }
-    });
-  }, []);
-  const [dealer, setDealer] = useState<Dealer>(dealers[0]);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [inquiries, setInquiries] = useState<Inquiry[]>(initialInquiries);
+  const [dealer, setDealer] = useState<Dealer | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartType, setCartType] = useState<OrderType>("daily");
+  const [loading, setLoading] = useState(true);
+
+  // Load authenticated dealer and orders from Supabase
+  useEffect(() => {
+    const loadDealerData = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          console.error("Auth error:", userError);
+          setLoading(false);
+          return;
+        }
+
+        // Get user role
+        const userRole = user.user_metadata?.role as string | undefined;
+        if (userRole === "admin" || userRole === "super_admin") {
+          setRole("admin");
+        } else {
+          setRole("dealer");
+        }
+
+        // For dealers, fetch their dealer record from Supabase
+        if (userRole === "dealer" || userRole === "sub_dealer") {
+          // Get dealer by supabase_uid
+          const { data: dealerData, error: dealerError } = await supabase
+            .from("dealers")
+            .select("*")
+            .eq("supabase_uid", user.id)
+            .single();
+
+          if (dealerError) {
+            console.error("Failed to fetch dealer:", dealerError);
+            setLoading(false);
+            return;
+          }
+
+          if (dealerData) {
+            // Map database fields to Dealer interface
+            const mappedDealer: Dealer = {
+              id: dealerData.id,
+              code: dealerData.code,
+              name: dealerData.company_name,
+              nameAr: dealerData.company_name, // Fallback for Arabic name
+              branch: dealerData.branch_address,
+              type: dealerData.dealer_type as "dealer" | "sub_dealer",
+              creditLimit: parseFloat(dealerData.credit_limit),
+              creditUsed: 0, // Will be calculated from orders
+              overdueBalance: parseFloat(dealerData.overdue_balance),
+              targetAmount: 0, // Placeholder
+              achievedAmount: 0, // Placeholder
+              isActive: dealerData.is_active,
+              financialStatus: dealerData.financial_status as "active" | "blocked" | "warning",
+            };
+
+            setDealer(mappedDealer);
+
+            // Fetch orders for this dealer
+            const { data: ordersData, error: ordersError } = await supabase
+              .from("orders")
+              .select("*")
+              .eq("dealer_id", dealerData.id)
+              .order("created_at", { ascending: false });
+
+            if (!ordersError && ordersData) {
+              // Map orders from database to Order interface (simplified for now)
+              const mappedOrders: Order[] = ordersData.map((o: any) => ({
+                id: o.id,
+                orderNumber: o.order_number,
+                dealerId: o.dealer_id,
+                orderType: o.order_type as OrderType,
+                status: o.status as OrderStatus,
+                submittedAt: o.created_at,
+                approvedAt: o.approved_at,
+                totalAmount: parseFloat(o.total_amount),
+                lines: [], // Will fetch separately if needed
+                shipments: [], // Will fetch separately if needed
+                invoices: [], // Will fetch separately if needed
+              }));
+
+              setOrders(mappedOrders);
+            }
+
+            // Fetch inquiries for this dealer
+            const { data: inquiriesData } = await supabase
+              .from("inquiries")
+              .select("*")
+              .eq("dealer_id", dealerData.id)
+              .order("created_at", { ascending: false });
+
+            if (inquiriesData) {
+              const mappedInquiries: Inquiry[] = inquiriesData.map((i: any) => ({
+                id: i.id,
+                dealerId: i.dealer_id,
+                partNumber: i.part_number,
+                quantity: i.quantity,
+                inquiryType: i.inquiry_type as "search" | "order_attempt",
+                createdAt: i.created_at,
+              }));
+
+              setInquiries(mappedInquiries);
+            }
+          }
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading dealer data:", error);
+        setLoading(false);
+      }
+    };
+
+    loadDealerData();
+  }, []);
 
   const addToCart = useCallback((line: CartLine) => {
     setCart((prev) => {
@@ -593,6 +696,19 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   );
 
   const stats: PortalStats = useMemo(() => {
+    if (!dealer) {
+      return {
+        totalOrders: 0,
+        pendingOrders: 0,
+        creditLimit: 0,
+        creditUsed: 0,
+        availableCredit: 0,
+        overdueBalance: 0,
+        targetPercent: 0,
+        monthlyRevenue: 0,
+      };
+    }
+
     const used = orders.filter((o) => o.status !== "rejected").reduce((s, o) => s + o.totalAmount, 0);
     return {
       totalOrders: orders.length,
@@ -606,12 +722,15 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     };
   }, [orders, dealer]);
 
+  // Provide fallback dealer during loading
+  const contextDealer = dealer || dealers[0];
+
   const value = useMemo(
     () => ({
       role,
       setRole,
-      dealer,
-      currentDealer: dealer,
+      dealer: contextDealer,
+      currentDealer: contextDealer,
       setCurrentDealer: setDealer,
       dealers,
       stats,
@@ -631,7 +750,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       role,
-      dealer,
+      contextDealer,
       stats,
       orders,
       inquiries,
