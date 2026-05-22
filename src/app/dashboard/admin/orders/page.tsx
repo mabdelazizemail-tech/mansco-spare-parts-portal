@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Filter,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -83,6 +85,24 @@ export default function AdminOrdersHistoryPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async (orderId: string, orderNumber: string) => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete order");
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setDeleteConfirm(null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to delete order");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -389,13 +409,46 @@ export default function AdminOrdersHistoryPage() {
                         {formatCurrency(order.total_amount)}
                       </TableCell>
                       <TableCell className="text-end">
-                        <Link
-                          href={`/dashboard/admin/orders/${order.id}`}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/40 transition hover:bg-[#00BFA6]/10 hover:text-[#00BFA6]"
-                          aria-label={`Open ${order.order_number}`}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Link>
+                        <div className="flex items-center justify-end gap-1">
+                          {deleteConfirm === order.id ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-red-400 hover:bg-red-500/10"
+                                disabled={deleting}
+                                onClick={() => handleDelete(order.id, order.order_number)}
+                              >
+                                {deleting ? "..." : "Confirm"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-white/40"
+                                onClick={() => setDeleteConfirm(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => setDeleteConfirm(order.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/40 transition hover:bg-red-500/10 hover:text-red-400"
+                                aria-label={`Delete ${order.order_number}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                              <Link
+                                href={`/dashboard/admin/orders/${order.id}`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/40 transition hover:bg-[#00BFA6]/10 hover:text-[#00BFA6]"
+                                aria-label={`Open ${order.order_number}`}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Link>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
