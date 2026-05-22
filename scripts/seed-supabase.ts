@@ -102,7 +102,7 @@ async function seed() {
       const authUser = dealerUsers.find((u) => u.email === dealer.email);
       return {
         ...dealer,
-        supabase_uid: authUser?.id || dealer.supabase_uid,
+        supabase_uid: authUser?.id,
       };
     });
 
@@ -149,18 +149,37 @@ async function seed() {
       return;
     }
 
-    // Upsert stock availability for each part
+    // Upsert stock availability for each part with varied scenarios
     console.log("📊 Creating or updating stock availability...");
-    for (const part of parts) {
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      let quantity_available: number;
+      let replenishment_eta: string | null;
+
+      // Create varied stock scenarios:
+      // - First 2 parts: Out of stock with ETA
+      // - Next 2 parts: Out of stock without ETA
+      // - Remaining parts: In stock with random quantities
+      if (i < 2) {
+        quantity_available = 0;
+        replenishment_eta = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      } else if (i < 4) {
+        quantity_available = 0;
+        replenishment_eta = null;
+      } else {
+        quantity_available = Math.floor(Math.random() * 100) + 10;
+        replenishment_eta = i % 3 === 0 ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] : null;
+      }
+
       const { error: stockError } = await supabase
         .from("stock_availability")
         .upsert(
           {
             part_number: part.part_number,
-            quantity_available: Math.floor(Math.random() * 100) + 10,
-            quantity_atp: Math.floor(Math.random() * 100) + 10,
+            quantity_available,
+            quantity_atp: quantity_available > 0 ? Math.floor(Math.random() * quantity_available) : 0,
             source_location: "Cairo Warehouse",
-            replenishment_eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            replenishment_eta,
           },
           { onConflict: "part_number" }
         );
