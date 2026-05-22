@@ -169,49 +169,38 @@ export async function POST(req: NextRequest) {
     let creditLimit = 0;
     let overdueBalance = 0;
     let financialStatus = "active";
-    let dealerCode: string | null = null;
+    let dealerCode = dealer_id; // Default to dealer_id if lookup fails
 
     try {
       // Try to look up dealer by ID (UUID) first
-      let dealerQuery = supabaseAdmin
+      const { data: dealer } = await supabaseAdmin
         .from("dealers")
         .select("code, credit_limit, overdue_balance, financial_status")
-        .eq("id", dealer_id);
-
-      let { data: dealer, error } = await dealerQuery.maybeSingle();
-
-      // If not found by ID, try by code (for backward compatibility)
-      if (!dealer && !error) {
-        const { data: dealerByCode } = await supabaseAdmin
-          .from("dealers")
-          .select("code, credit_limit, overdue_balance, financial_status")
-          .eq("code", dealer_id)
-          .maybeSingle();
-        dealer = dealerByCode;
-      }
+        .eq("id", dealer_id)
+        .maybeSingle();
 
       if (dealer) {
         dealerCode = dealer.code;
         creditLimit = dealer.credit_limit ?? 0;
         overdueBalance = dealer.overdue_balance ?? 0;
         financialStatus = dealer.financial_status ?? "active";
-      } else if (!dealerCode) {
-        // If we still don't have a dealer code, reject the request
-        return NextResponse.json(
-          { error: { code: "VALIDATION_ERROR", message: `Dealer ${dealer_id} not found` } },
-          { status: 400 }
-        );
-      }
-    } catch (e) {
-      // Non-fatal: proceed with whatever we have
-    }
+      } else {
+        // Try by code if not found by ID
+        const { data: dealerByCode } = await supabaseAdmin
+          .from("dealers")
+          .select("code, credit_limit, overdue_balance, financial_status")
+          .eq("code", dealer_id)
+          .maybeSingle();
 
-    // Ensure dealerCode is set before proceeding
-    if (!dealerCode) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Invalid dealer ID" } },
-        { status: 400 }
-      );
+        if (dealerByCode) {
+          dealerCode = dealerByCode.code;
+          creditLimit = dealerByCode.credit_limit ?? 0;
+          overdueBalance = dealerByCode.overdue_balance ?? 0;
+          financialStatus = dealerByCode.financial_status ?? "active";
+        }
+      }
+    } catch {
+      // Non-fatal: proceed with dealer_id as fallback
     }
 
     const validation = validateOrderSubmission({
