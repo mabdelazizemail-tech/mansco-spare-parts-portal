@@ -3,6 +3,7 @@
 import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { StatusBadge } from "@/components/portal/status-badge";
 import { PartThumbnail } from "@/components/parts/part-thumbnail";
 import { Button } from "@/components/ui/button";
@@ -103,6 +104,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [reviewAction, setReviewAction] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  // Get user role from session
+  useEffect(() => {
+    const getUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserRole(user?.user_metadata?.role ?? null);
+    };
+    getUser();
+  }, []);
 
   const fetchOrder = useCallback(async () => {
     setLoading(true);
@@ -309,8 +321,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* Admin Review Actions */}
-          {isUnderReview && (
+          {/* Admin Review Actions — Only visible to admins */}
+          {isUnderReview && (userRole === "admin" || userRole === "super_admin") && (
             <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
               <h3 className="font-semibold text-white">Review Actions</h3>
               {reviewAction ? (
