@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import {
   Search,
   Plus,
-  Bookmark,
+  BellRing,
   Filter,
   Check,
   Loader2,
@@ -96,6 +96,7 @@ export default function PartsInquiry() {
   const [error, setError] = useState("");
   const [staleWarning, setStaleWarning] = useState<string | null>(null);
   const [inquiryLoading, setInquiryLoading] = useState<string | null>(null);
+  const [inquirySaved, setInquirySaved] = useState<string | null>(null);
   const [toastName, setToastName] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -151,10 +152,13 @@ export default function PartsInquiry() {
     [cart]
   );
 
+  // Logs an "out-of-stock interest" inquiry so MANSCO can track demand for
+  // unavailable parts. This is what feeds the Lost Sales report — it does NOT
+  // create an order. See the button tooltip for the user-facing explanation.
   const saveInquiry = async (part: PartSearchResult) => {
     setInquiryLoading(part.part_number);
     try {
-      await fetch("/api/parts/inquiry", {
+      const res = await fetch("/api/parts/inquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -164,9 +168,32 @@ export default function PartsInquiry() {
           inquiry_type: "search",
         }),
       });
+      if (res.ok) {
+        setInquirySaved(part.part_number);
+        // Keep the "Notified" confirmation visible briefly, then return the
+        // button to its idle state.
+        setTimeout(() => setInquirySaved(null), 2500);
+      }
     } finally {
       setInquiryLoading(null);
     }
+  };
+
+  // Manual qty input handler: clamp to [1, available] when stock is known.
+  const handleQtyInput = (
+    partNumber: string,
+    available: number,
+    raw: string
+  ) => {
+    // Allow the user to clear the field while typing; default empty back to 1.
+    if (raw === "") {
+      cart.setQty(partNumber, 1);
+      return;
+    }
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed) || parsed < 1) return;
+    const next = available > 0 ? Math.min(parsed, available) : parsed;
+    cart.setQty(partNumber, next);
   };
 
   const counts = useMemo(
@@ -456,7 +483,10 @@ export default function PartsInquiry() {
                     <td className="px-4 py-3">
                       {priceable ? (
                         inCart ? (
-                          /* Inline qty controls when item is already in cart */
+                          /* Inline qty controls when item is already in cart.
+                             Dealers can either tap +/- or type the qty directly
+                             into the input — the input is clamped to the
+                             available stock when known. */
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() =>
@@ -470,9 +500,32 @@ export default function PartsInquiry() {
                             >
                               <Minus className="h-3 w-3" />
                             </button>
-                            <span className="w-7 text-center text-xs font-semibold text-[#00BFA6]">
-                              {qtyInCart}
-                            </span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={
+                                part.quantity_available > 0
+                                  ? part.quantity_available
+                                  : undefined
+                              }
+                              value={qtyInCart}
+                              onChange={(e) =>
+                                handleQtyInput(
+                                  part.part_number,
+                                  part.quantity_available,
+                                  e.target.value
+                                )
+                              }
+                              onBlur={(e) => {
+                                // Snap back to 1 if the user left the field empty
+                                if (e.target.value === "") {
+                                  cart.setQty(part.part_number, 1);
+                                }
+                              }}
+                              className="h-7 w-12 rounded border border-[#2A2A2A] bg-[#0D0D0D] text-center text-xs font-semibold text-[#00BFA6] focus:border-[#00BFA6] focus:outline-none focus:ring-1 focus:ring-[#00BFA6]/30 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield]"
+                              aria-label={`Quantity of ${part.name}`}
+                            />
                             <button
                               onClick={() =>
                                 cart.setQty(
@@ -508,16 +561,28 @@ export default function PartsInquiry() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="gap-1.5 border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
+                          className={`gap-1.5 transition ${
+                            inquirySaved === part.part_number
+                              ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                              : "border-orange-500/30 text-orange-400 hover:bg-orange-500/10"
+                          }`}
                           onClick={() => saveInquiry(part)}
-                          disabled={inquiryLoading === part.part_number}
+                          disabled={
+                            inquiryLoading === part.part_number ||
+                            inquirySaved === part.part_number
+                          }
+                          title="Lets MANSCO know you're looking for this part. They'll prioritise restocking and notify you when it's available. This does NOT create an order."
                         >
                           {inquiryLoading === part.part_number ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : inquirySaved === part.part_number ? (
+                            <Check className="h-3.5 w-3.5" />
                           ) : (
-                            <Bookmark className="h-3.5 w-3.5" />
+                            <BellRing className="h-3.5 w-3.5" />
                           )}
-                          Save Inquiry
+                          {inquirySaved === part.part_number
+                            ? "Request sent"
+                            : "Notify me when available"}
                         </Button>
                       )}
                     </td>

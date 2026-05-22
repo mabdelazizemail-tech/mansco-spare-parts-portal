@@ -70,6 +70,13 @@ const adminNav: NavSection[] = [
     ],
   },
   {
+    label: "FULFILLMENT",
+    items: [
+      { href: "/dashboard/admin/orders", label: "Order History", icon: FileText },
+      { href: "/dashboard/admin/invoicing", label: "Invoicing", icon: Receipt },
+    ],
+  },
+  {
     label: "NETWORK",
     items: [
       { href: "/dashboard/admin/registrations", label: "Registrations", icon: UserCheck, badge: "pendingRegistrations" },
