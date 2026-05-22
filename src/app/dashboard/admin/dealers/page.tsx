@@ -252,8 +252,9 @@ function DealerEditModal({
     setSaving(true);
     setError("");
     try {
+      const { code: _, ...formWithoutCode } = form;
       const payload = {
-        ...form,
+        ...formWithoutCode,
         credit_limit: Number(form.credit_limit),
         overdue_balance: Number(form.overdue_balance),
       };
@@ -549,7 +550,6 @@ function CreditManagementModal({
     setError("");
     try {
       const payload = {
-        code: dealer.code ?? "",
         company_name: dealer.company_name,
         contact_person: dealer.contact_person,
         phone: dealer.phone ?? "",
