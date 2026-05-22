@@ -30,60 +30,63 @@ export default function LostSalesReportPage() {
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#000000]">
+          <h1 className="text-2xl font-bold tracking-tight text-white">
             Lost Sales Report
           </h1>
-          <p className="mt-1 text-sm text-[#6B6B6B]">
+          <p className="mt-1 text-sm text-white/40">
             Track lost revenue and identify demand gaps.
           </p>
         </div>
-        <Button variant="outline">
+        <Button
+          variant="outline"
+          className="border-[#2A2A2A] bg-[#1A1A1A] text-white/60 hover:border-[#3A3A3A] hover:bg-[#1A1A1A] hover:text-white"
+        >
           <Download className="me-2 h-4 w-4" /> {t("common.export")}
         </Button>
       </div>
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
+        <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111]">
           <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-red-100 p-3">
-              <TrendingDown className="h-5 w-5 text-red-700" />
+            <div className="rounded-lg bg-red-500/10 p-3">
+              <TrendingDown className="h-5 w-5 text-red-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-[#000000]">
+              <p className="text-2xl font-bold text-white">
                 {lostSales.length}
               </p>
-              <p className="text-xs uppercase tracking-wider text-[#6B6B6B]">
+              <p className="text-xs uppercase tracking-wider text-white/40">
                 Lost Sales
               </p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111]">
           <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-amber-100 p-3">
-              <FileText className="h-5 w-5 text-amber-700" />
+            <div className="rounded-lg bg-amber-500/10 p-3">
+              <FileText className="h-5 w-5 text-amber-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-[#000000]">
+              <p className="text-2xl font-bold text-white">
                 {formatCurrency(lostRevenue)}
               </p>
-              <p className="text-xs uppercase tracking-wider text-[#6B6B6B]">
+              <p className="text-xs uppercase tracking-wider text-white/40">
                 Est. Lost Revenue
               </p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111]">
           <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-emerald-100 p-3">
-              <TrendingUp className="h-5 w-5 text-emerald-700" />
+            <div className="rounded-lg bg-emerald-500/10 p-3">
+              <TrendingUp className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-[#000000]">
+              <p className="text-2xl font-bold text-white">
                 {new Set(lostSales.map((l) => l.dealerId)).size}
               </p>
-              <p className="text-xs uppercase tracking-wider text-[#6B6B6B]">
+              <p className="text-xs uppercase tracking-wider text-white/40">
                 Dealers Reporting
               </p>
             </div>
@@ -92,37 +95,40 @@ export default function LostSalesReportPage() {
       </div>
 
       {/* Detail table */}
-      <Card>
+      <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
         <CardHeader>
-          <CardTitle className="text-base">Lost Sales Detail</CardTitle>
+          <CardTitle className="text-base text-white">Lost Sales Detail</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Dealer</TableHead>
-                <TableHead>Part #</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead className="text-end">Est. Value</TableHead>
+              <TableRow className="border-[#2A2A2A] hover:bg-transparent">
+                <TableHead className="text-white/50 font-semibold">Date</TableHead>
+                <TableHead className="text-white/50 font-semibold">Dealer</TableHead>
+                <TableHead className="text-white/50 font-semibold">Part #</TableHead>
+                <TableHead className="text-white/50 font-semibold">Customer</TableHead>
+                <TableHead className="text-white/50 font-semibold">Reason</TableHead>
+                <TableHead className="text-end text-white/50 font-semibold">Est. Value</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {lostSales.map((ls) => (
-                <TableRow key={ls.id}>
-                  <TableCell className="text-sm">
+                <TableRow
+                  key={ls.id}
+                  className="border-[#2A2A2A] transition hover:bg-white/[0.02]"
+                >
+                  <TableCell className="text-sm text-white/70">
                     {ls.createdAt.slice(0, 10)}
                   </TableCell>
-                  <TableCell>{dealerName(ls.dealerId)}</TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="text-white">{dealerName(ls.dealerId)}</TableCell>
+                  <TableCell className="font-mono text-xs text-white/70">
                     {ls.partNumber}
                   </TableCell>
-                  <TableCell>{ls.customerName}</TableCell>
-                  <TableCell className="max-w-xs text-sm text-[#6B6B6B]">
+                  <TableCell className="text-white">{ls.customerName}</TableCell>
+                  <TableCell className="max-w-xs text-sm text-white/60">
                     {ls.reason}
                   </TableCell>
-                  <TableCell className="text-end font-mono font-semibold text-red-700">
+                  <TableCell className="text-end font-mono font-semibold text-red-400">
                     {formatCurrency(ls.estimatedValue)}
                   </TableCell>
                 </TableRow>

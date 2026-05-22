@@ -2,7 +2,7 @@
 
 import { Download } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
-import { inquiries, dealers, formatCurrency } from "@/lib/mock-data";
+import { inquiries, dealers } from "@/lib/mock-data";
 import {
   Card,
   CardContent,
@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/table";
 
 const statusStyles: Record<string, string> = {
-  open: "bg-blue-50 text-blue-700 border-blue-200",
-  replied: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  closed: "bg-gray-50 text-gray-700 border-gray-200",
+  open: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  replied: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  closed: "bg-white/5 text-white/50 border-[#2A2A2A]",
 };
 
 export default function AdminInquiriesPage() {
@@ -35,46 +35,49 @@ export default function AdminInquiriesPage() {
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#000000]">
+          <h1 className="text-2xl font-bold tracking-tight text-white">
             Inquiry Report
           </h1>
-          <p className="mt-1 text-sm text-[#6B6B6B]">
+          <p className="mt-1 text-sm text-white/40">
             All dealer inquiries across the network.
           </p>
         </div>
-        <Button variant="outline">
+        <Button
+          variant="outline"
+          className="border-[#2A2A2A] bg-[#1A1A1A] text-white/60 hover:border-[#3A3A3A] hover:bg-[#1A1A1A] hover:text-white"
+        >
           <Download className="me-2 h-4 w-4" /> {t("common.export")}
         </Button>
       </div>
 
       {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
+        <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111]">
           <CardContent className="p-6">
-            <p className="text-xs uppercase tracking-wider text-[#6B6B6B]">
+            <p className="text-xs uppercase tracking-wider text-white/40 font-semibold">
               Total Inquiries
             </p>
-            <p className="mt-2 text-2xl font-bold text-[#000000]">
+            <p className="mt-2 text-2xl font-bold text-white">
               {inquiries.length}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111]">
           <CardContent className="p-6">
-            <p className="text-xs uppercase tracking-wider text-[#6B6B6B]">
+            <p className="text-xs uppercase tracking-wider text-white/40 font-semibold">
               Open
             </p>
-            <p className="mt-2 text-2xl font-bold text-blue-600">
+            <p className="mt-2 text-2xl font-bold text-blue-400">
               {inquiries.filter((i) => i.status === "open").length}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111]">
           <CardContent className="p-6">
-            <p className="text-xs uppercase tracking-wider text-[#6B6B6B]">
+            <p className="text-xs uppercase tracking-wider text-white/40 font-semibold">
               Replied
             </p>
-            <p className="mt-2 text-2xl font-bold text-emerald-600">
+            <p className="mt-2 text-2xl font-bold text-emerald-400">
               {inquiries.filter((i) => i.status === "replied").length}
             </p>
           </CardContent>
@@ -82,38 +85,43 @@ export default function AdminInquiriesPage() {
       </div>
 
       {/* Table */}
-      <Card>
+      <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
         <CardHeader>
-          <CardTitle className="text-base">All Inquiries</CardTitle>
+          <CardTitle className="text-base text-white">All Inquiries</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Dealer</TableHead>
-                <TableHead>Part #</TableHead>
-                <TableHead>Message</TableHead>
-                <TableHead>Status</TableHead>
+              <TableRow className="border-[#2A2A2A] hover:bg-transparent">
+                <TableHead className="text-white/50 font-semibold">Date</TableHead>
+                <TableHead className="text-white/50 font-semibold">Dealer</TableHead>
+                <TableHead className="text-white/50 font-semibold">Part #</TableHead>
+                <TableHead className="text-white/50 font-semibold">Message</TableHead>
+                <TableHead className="text-white/50 font-semibold">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {inquiries.map((inq) => (
-                <TableRow key={inq.id}>
-                  <TableCell className="text-sm">
+                <TableRow
+                  key={inq.id}
+                  className="border-[#2A2A2A] transition hover:bg-white/[0.02]"
+                >
+                  <TableCell className="text-sm text-white/70">
                     {inq.createdAt.slice(0, 10)}
                   </TableCell>
-                  <TableCell>{dealerName(inq.dealerId)}</TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="text-white">{dealerName(inq.dealerId)}</TableCell>
+                  <TableCell className="font-mono text-xs text-white/70">
                     {inq.partNumber}
                   </TableCell>
-                  <TableCell className="max-w-md truncate text-sm text-[#6B6B6B]">
+                  <TableCell className="max-w-md truncate text-sm text-white/60">
                     {inq.message}
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={`uppercase font-semibold ${statusStyles[inq.status] ?? ""}`}
+                      className={`uppercase font-semibold text-[10px] ${
+                        statusStyles[inq.status] ?? "border-[#2A2A2A] text-white/50"
+                      }`}
                     >
                       {inq.status}
                     </Badge>
