@@ -106,13 +106,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { dealer_id, order_type, items, notes } = body ?? {};
+    let { dealer_id, order_type, items, notes } = body ?? {};
 
     if (!dealer_id || !order_type || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "dealer_id, order_type, and items[] are required" } },
         { status: 400 }
       );
+    }
+
+    // Replace "self" with authenticated dealer ID
+    if (dealer_id === "self") {
+      if (!authenticatedDealerId) {
+        return NextResponse.json(
+          { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+          { status: 401 }
+        );
+      }
+      dealer_id = authenticatedDealerId;
     }
 
     // Dealers can only create orders for themselves; admins can create for any dealer
