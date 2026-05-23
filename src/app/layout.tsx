@@ -29,6 +29,11 @@ export const metadata: Metadata = {
   title: "MANSCO Spare Parts Portal | OriginalParts Hub",
   description:
     "Peugeot Egypt dealer portal for spare parts ordering, tracking, and management.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

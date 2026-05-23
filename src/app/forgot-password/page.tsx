@@ -62,11 +62,11 @@ export default function ForgotPasswordPage() {
             <div className="flex items-center gap-3">
               <div className="relative h-10 w-10 shrink-0 overflow-hidden">
                 <Image
-                  src="/peugeot-logo.png"
-                  alt="Peugeot"
+                  src="/logo.png"
+                  alt="MANSCO"
                   width={40}
                   height={40}
-                  className="invert object-contain"
+                  className="object-contain"
                   priority
                 />
               </div>
@@ -94,11 +94,11 @@ export default function ForgotPasswordPage() {
             <div className="mb-10 flex items-center gap-2 lg:hidden">
               <div className="relative h-8 w-8 shrink-0 overflow-hidden">
                 <Image
-                  src="/peugeot-logo.png"
-                  alt="Peugeot"
+                  src="/logo.png"
+                  alt="MANSCO"
                   width={32}
                   height={32}
-                  className="invert object-contain"
+                  className="object-contain"
                 />
               </div>
               <span className="text-sm font-bold text-white">MANSCO Portal</span>
@@ -151,11 +151,11 @@ export default function ForgotPasswordPage() {
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden">
               <Image
-                src="/peugeot-logo.png"
-                alt="Peugeot"
+                src="/logo.png"
+                alt="MANSCO"
                 width={40}
                 height={40}
-                className="invert object-contain"
+                className="object-contain"
                 priority
               />
             </div>
@@ -197,11 +197,11 @@ export default function ForgotPasswordPage() {
           <div className="mb-10 flex items-center gap-2 lg:hidden">
             <div className="relative h-8 w-8 shrink-0 overflow-hidden">
               <Image
-                src="/peugeot-logo.png"
-                alt="Peugeot"
+                src="/logo.png"
+                alt="MANSCO"
                 width={32}
                 height={32}
-                className="invert object-contain"
+                className="object-contain"
               />
             </div>
             <span className="text-sm font-bold text-white">MANSCO Portal</span>

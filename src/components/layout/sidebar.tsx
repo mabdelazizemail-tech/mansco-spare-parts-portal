@@ -137,11 +137,11 @@ export function Sidebar() {
       <div className="flex items-center gap-3 px-6 py-5">
         <div className="relative h-8 w-8 shrink-0 overflow-hidden">
           <Image
-            src="/peugeot-logo.png"
-            alt="Peugeot"
+            src="/logo.png"
+            alt="MANSCO"
             width={32}
             height={32}
-            className="invert object-contain"
+            className="object-contain"
           />
         </div>
         <div className="flex flex-col leading-none">

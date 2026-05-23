@@ -191,12 +191,11 @@ function LogoHeader() {
     <div className="mx-auto mb-8 flex items-center justify-center gap-3">
       <div className="relative h-10 w-10 shrink-0 overflow-hidden">
         <Image
-          src="/peugeot-logo.png"
-          alt="Peugeot"
+          src="/logo.png"
+          alt="MANSCO"
           width={40}
           height={40}
           className="object-contain"
-          style={{ filter: "brightness(0) invert(1)" }}
           priority
         />
       </div>

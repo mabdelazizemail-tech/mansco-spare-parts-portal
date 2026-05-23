@@ -13,12 +13,11 @@ export function Logo({
   return (
     <div className="flex items-center gap-3">
       <Image
-        src="/peugeot-logo.png"
-        alt="Peugeot"
+        src="/logo.png"
+        alt="MANSCO / Peugeot"
         width={96}
         height={96}
         className="shrink-0 object-contain"
-        style={{ filter: "brightness(0) invert(1)" }}
       />
       {showText && (
         <div className="flex flex-col leading-tight">
