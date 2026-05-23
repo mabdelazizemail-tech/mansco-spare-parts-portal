@@ -68,23 +68,24 @@ export default function LoginPage() {
 
         <div className="relative z-10 flex h-full flex-col justify-between p-12">
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="relative h-10 w-10 shrink-0 overflow-hidden">
-              <Image
-                src="/logo.png"
-                alt="MANSCO"
-                width={40}
-                height={40}
-                className="object-contain"
-                priority
-              />
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="text-sm font-bold tracking-[0.1em] text-white">
+          <div className="flex items-center">
+            <Image
+              src="/logo.png"
+              alt="MANSCO"
+              width={52}
+              height={52}
+              className="shrink-0 object-contain"
+              priority
+            />
+            <div className="ms-3.5 flex flex-col leading-none">
+              <span
+                className="text-[22px] font-bold text-white tracking-[0.04em]"
+                style={{ fontFamily: "var(--font-heading)" }}
+              >
                 MANSCO
               </span>
-              <span className="text-[10px] font-medium tracking-[0.15em] text-white/50">
-                SPARE PARTS PORTAL
+              <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+                Spare Parts Portal
               </span>
             </div>
           </div>
@@ -128,17 +129,25 @@ export default function LoginPage() {
       <div className="flex flex-col justify-center bg-[#0D0D0D] px-10 py-12">
         <div className="mx-auto w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="mb-10 flex items-center gap-2 lg:hidden">
-            <div className="relative h-8 w-8 shrink-0 overflow-hidden">
-              <Image
-                src="/logo.png"
-                alt="MANSCO"
-                width={32}
-                height={32}
-                className="object-contain"
-              />
+          <div className="mb-10 flex items-center lg:hidden">
+            <Image
+              src="/logo.png"
+              alt="MANSCO"
+              width={40}
+              height={40}
+              className="shrink-0 object-contain"
+            />
+            <div className="ms-3 flex flex-col leading-none">
+              <span
+                className="text-base font-bold text-white tracking-[0.04em]"
+                style={{ fontFamily: "var(--font-heading)" }}
+              >
+                MANSCO
+              </span>
+              <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                Spare Parts Portal
+              </span>
             </div>
-            <span className="text-sm font-bold text-white">MANSCO Portal</span>
           </div>
 
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-white/40">

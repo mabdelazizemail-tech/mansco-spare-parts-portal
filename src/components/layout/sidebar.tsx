@@ -134,22 +134,24 @@ export function Sidebar() {
   return (
     <aside className="hidden w-[264px] shrink-0 flex-col border-e border-sidebar-border bg-sidebar lg:flex">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden">
-          <Image
-            src="/logo.png"
-            alt="MANSCO"
-            width={32}
-            height={32}
-            className="object-contain"
-          />
-        </div>
-        <div className="flex flex-col leading-none">
-          <span className="text-sm font-bold tracking-[0.1em] text-white">
+      <div className="flex items-center px-5 py-5 border-b border-sidebar-border/50">
+        <Image
+          src="/logo.png"
+          alt="MANSCO"
+          width={42}
+          height={42}
+          className="shrink-0 object-contain"
+          priority
+        />
+        <div className="ms-3 flex flex-col leading-none">
+          <span
+            className="text-[17px] font-bold text-white tracking-[0.04em]"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
             MANSCO
           </span>
-          <span className="text-[9px] font-medium tracking-[0.15em] text-white/40">
-            SPARE PARTS PORTAL
+          <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.2em] text-white/45">
+            Spare Parts Portal
           </span>
         </div>
       </div>

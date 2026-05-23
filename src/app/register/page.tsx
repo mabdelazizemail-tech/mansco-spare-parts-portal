@@ -151,23 +151,24 @@ export default function RegisterPage() {
         <div className="pointer-events-none absolute bottom-0 left-0 h-[40%] w-[50%] bg-gradient-to-tr from-[#C41E3A]/10 to-transparent" />
 
         <div className="relative z-10 flex h-full flex-col justify-between p-12">
-          <div className="flex items-center gap-3">
-            <div className="relative h-10 w-10 shrink-0 overflow-hidden">
-              <Image
-                src="/logo.png"
-                alt="MANSCO"
-                width={40}
-                height={40}
-                className="object-contain"
-                priority
-              />
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="text-sm font-bold tracking-[0.1em] text-white">
+          <div className="flex items-center">
+            <Image
+              src="/logo.png"
+              alt="MANSCO"
+              width={52}
+              height={52}
+              className="shrink-0 object-contain"
+              priority
+            />
+            <div className="ms-3.5 flex flex-col leading-none">
+              <span
+                className="text-[22px] font-bold text-white tracking-[0.04em]"
+                style={{ fontFamily: "var(--font-heading)" }}
+              >
                 MANSCO
               </span>
-              <span className="text-[10px] font-medium tracking-[0.15em] text-white/50">
-                SPARE PARTS PORTAL
+              <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+                Spare Parts Portal
               </span>
             </div>
           </div>
