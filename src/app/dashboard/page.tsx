@@ -217,7 +217,7 @@ export default function DealerDashboard() {
                     onClick={() => router.push(`/dashboard/orders/${o.id}`)}
                   >
                     <td className="px-5 py-3 font-mono text-xs font-semibold text-white">
-                      {o.id}
+                      {o.orderNumber ?? o.id}
                     </td>
                     <td className="px-5 py-3">
                       <StatusBadge tone={orderTypeMeta[o.orderType]?.tone} label={orderTypeMeta[o.orderType]?.label} />
