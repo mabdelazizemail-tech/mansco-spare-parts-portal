@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Shield,
@@ -18,11 +18,19 @@ import {
 import {
   adminOrders,
   adminDashboardStats,
-  dealers,
   campaigns,
   lostSales,
   formatCurrency,
 } from "@/lib/mock-data";
+
+type Dealer = {
+  id: string;
+  code: string | null;
+  company_name: string;
+  branch_address: string | null;
+  financial_status: string | null;
+  credit_limit: number | null;
+};
 import {
   Card,
   CardContent,
@@ -101,6 +109,15 @@ const lostRevenue = lostSales.reduce((s, l) => s + l.estimatedValue, 0);
 const latestOrders = adminOrders.slice(0, 8);
 
 export default function AdminDashboardPage() {
+  const [dealers, setDealers] = useState<Dealer[]>([]);
+
+  useEffect(() => {
+    fetch("/api/dealers")
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((body) => setDealers(body.data ?? []))
+      .catch(() => setDealers([]));
+  }, []);
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -170,44 +187,45 @@ export default function AdminDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dealers.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-semibold">{d.name}</TableCell>
-                    <TableCell className="text-sm text-[#6B6B6B]">
-                      {d.branch}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={`uppercase font-semibold ${
-                          d.financialStatus === "active" ||
-                          d.financialStatus === "green"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : d.financialStatus === "blocked" ||
-                                d.financialStatus === "red"
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}
-                      >
-                        {d.financialStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress
-                          value={d.targetAchievement}
-                          className="h-2 flex-1"
-                        />
-                        <span className="text-xs font-semibold">
-                          {d.targetAchievement}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-end font-mono text-sm">
-                      {formatCurrency(d.creditLimit)}
+                {dealers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-white/40 py-8">
+                      No dealers found
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  dealers.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="font-semibold">{d.company_name}</TableCell>
+                      <TableCell className="text-sm text-[#6B6B6B]">
+                        {d.branch_address ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`uppercase font-semibold ${
+                            d.financial_status === "active"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : d.financial_status === "blocked"
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}
+                        >
+                          {d.financial_status ?? "unknown"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={0} className="h-2 flex-1" />
+                          <span className="text-xs font-semibold">—</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-end font-mono text-sm">
+                        {formatCurrency(d.credit_limit ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
