@@ -394,7 +394,7 @@ export default function AdminOrdersHistoryPage() {
                     >
                       <TableCell>
                         <Link
-                          href={`/dashboard/admin/orders/${order.id}`}
+                          href={`/dashboard/orders/${order.id}`}
                           className="font-mono text-xs font-semibold text-[#00BFA6] hover:underline"
                         >
                           {order.order_number}
@@ -473,7 +473,7 @@ export default function AdminOrdersHistoryPage() {
                                 <Trash2 className="h-4 w-4" />
                               </button>
                               <Link
-                                href={`/dashboard/admin/orders/${order.id}`}
+                                href={`/dashboard/orders/${order.id}`}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/40 transition hover:bg-[#00BFA6]/10 hover:text-[#00BFA6]"
                                 aria-label={`Open ${order.order_number}`}
                               >

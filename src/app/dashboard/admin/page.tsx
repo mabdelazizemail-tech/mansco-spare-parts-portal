@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
               {pendingOrders.slice(0, 3).map((o) => (
                 <Link
                   key={o.id}
-                  href={`/dashboard/admin/orders/${o.id}`}
+                  href={`/dashboard/orders/${o.id}`}
                   className="flex items-center justify-between rounded-md border p-2.5 text-sm transition-colors hover:bg-muted/50"
                 >
                   <div>
@@ -319,7 +319,7 @@ export default function AdminDashboardPage() {
                 <TableRow key={order.id}>
                   <TableCell>
                     <Link
-                      href={`/dashboard/admin/orders/${order.id}`}
+                      href={`/dashboard/orders/${order.id}`}
                       className="font-mono text-xs font-semibold text-[#00A3E0] hover:underline"
                     >
                       {order.id}
