@@ -75,9 +75,16 @@ function formatDate(iso: string): string {
   });
 }
 
+type DealerInfo = {
+  id: string;
+  code: string | null;
+  company_name: string;
+};
+
 export default function AdminOrdersHistoryPage() {
   const { t } = useTranslation();
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [dealers, setDealers] = useState<DealerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -89,6 +96,20 @@ export default function AdminOrdersHistoryPage() {
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Build lookup map: id -> name and code -> name
+  const dealerNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    dealers.forEach((d) => {
+      if (d.id) map.set(d.id, d.company_name);
+      if (d.code) map.set(d.code, d.company_name);
+    });
+    return map;
+  }, [dealers]);
+
+  const getDealerName = (dealerId: string): string => {
+    return dealerNameMap.get(dealerId) ?? dealerId;
+  };
 
   const handleDelete = async (orderId: string, orderNumber: string) => {
     setDeleting(true);
@@ -115,10 +136,22 @@ export default function AdminOrdersHistoryPage() {
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (search) params.set("q", search);
 
-      const res = await fetch(`/api/orders?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to load orders");
-      const body = await res.json();
-      setOrders(body.data ?? []);
+      // Fetch orders and dealers in parallel
+      const [ordersRes, dealersRes] = await Promise.all([
+        fetch(`/api/orders?${params.toString()}`),
+        fetch(`/api/dealers`),
+      ]);
+
+      if (!ordersRes.ok) throw new Error("Failed to load orders");
+
+      const ordersBody = await ordersRes.json();
+      setOrders(ordersBody.data ?? []);
+
+      // Dealers fetch is non-fatal — we can still show UUIDs if it fails
+      if (dealersRes.ok) {
+        const dealersBody = await dealersRes.json();
+        setDealers(dealersBody.data ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load orders");
     } finally {
@@ -373,7 +406,7 @@ export default function AdminOrdersHistoryPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-white">
-                        {order.dealer_id}
+                        {getDealerName(order.dealer_id)}
                       </TableCell>
                       <TableCell>
                         <Badge

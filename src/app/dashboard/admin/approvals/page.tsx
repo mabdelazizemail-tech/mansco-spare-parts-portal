@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/portal/status-badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,12 @@ type OrderRow = {
   order_lines: { id: string }[];
 };
 
+type DealerInfo = {
+  id: string;
+  code: string | null;
+  company_name: string;
+};
+
 const typeTone: Record<string, ToneColor> = { daily: "info", air_dhl: "warning", stock: "accent" };
 const typeLabel: Record<string, string> = { daily: "Daily", air_dhl: "Air / DHL", stock: "Stock" };
 
@@ -49,6 +55,7 @@ function timeSince(dateStr: string): string {
 
 export default function AdminApprovalsPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [dealers, setDealers] = useState<DealerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -56,20 +63,45 @@ export default function AdminApprovalsPage() {
   const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  // Build lookup map: id -> name and code -> name
+  const dealerNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    dealers.forEach((d) => {
+      if (d.id) map.set(d.id, d.company_name);
+      if (d.code) map.set(d.code, d.company_name);
+    });
+    return map;
+  }, [dealers]);
+
+  const getDealerName = (dealerId: string): string => {
+    return dealerNameMap.get(dealerId) ?? dealerId;
+  };
+
   const fetchQueue = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      // Fetch submitted and under_review orders
+      // Fetch orders and dealers in parallel
       const params = new URLSearchParams({ admin_view: "true", limit: "100" });
-      const res = await fetch(`/api/orders?${params}`);
-      if (!res.ok) throw new Error("Failed to load review queue");
-      const body = await res.json();
+      const [ordersRes, dealersRes] = await Promise.all([
+        fetch(`/api/orders?${params}`),
+        fetch(`/api/dealers`),
+      ]);
+
+      if (!ordersRes.ok) throw new Error("Failed to load review queue");
+
+      const body = await ordersRes.json();
       // Filter to reviewable statuses
       const reviewable = (body.data ?? []).filter(
         (o: OrderRow) => o.status === "submitted" || o.status === "under_review"
       );
       setOrders(reviewable);
+
+      // Dealers fetch is non-fatal
+      if (dealersRes.ok) {
+        const dealersBody = await dealersRes.json();
+        setDealers(dealersBody.data ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -200,7 +232,7 @@ export default function AdminApprovalsPage() {
                       {o.order_number}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 text-white/60 text-xs font-mono">{o.dealer_id}</td>
+                  <td className="px-5 py-3 text-white/80 text-xs">{getDealerName(o.dealer_id)}</td>
                   <td className="px-5 py-3">
                     <StatusBadge tone={typeTone[o.order_type] ?? "muted"} label={typeLabel[o.order_type] ?? o.order_type} />
                   </td>
