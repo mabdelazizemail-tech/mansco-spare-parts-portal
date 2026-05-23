@@ -105,6 +105,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [dealerName, setDealerName] = useState<string | null>(null);
 
   // Get user role from session
   useEffect(() => {
@@ -131,6 +132,37 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   }, [id]);
 
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
+
+  // Resolve dealer name from dealer_id (UUID or code)
+  useEffect(() => {
+    if (!order?.dealer_id) {
+      setDealerName(null);
+      return;
+    }
+    const dealerId = order.dealer_id;
+    const supabase = createClient();
+    // Try lookup by id (UUID) first, then by code
+    supabase
+      .from("dealers")
+      .select("company_name")
+      .eq("id", dealerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.company_name) {
+          setDealerName(data.company_name);
+        } else {
+          // Fallback: try by code
+          supabase
+            .from("dealers")
+            .select("company_name")
+            .eq("code", dealerId)
+            .maybeSingle()
+            .then(({ data: byCode }) => {
+              setDealerName(byCode?.company_name ?? null);
+            });
+        }
+      });
+  }, [order?.dealer_id]);
 
   const handleReview = async (action: string) => {
     if (!order) return;
@@ -382,7 +414,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-white/40">Dealer</span>
-                <span className="text-white font-mono text-xs">{order.dealer_id}</span>
+                <span className="text-white text-sm">{dealerName ?? order.dealer_id}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/40">Type</span>
