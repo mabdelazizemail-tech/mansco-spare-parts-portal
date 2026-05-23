@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
     let creditLimit = 0;
     let overdueBalance = 0;
     let financialStatus = "active";
-    let dealerCode = dealer_id; // Default to dealer_id if lookup fails
+    let dealerCode: string = dealer_id; // Default to dealer_id (never null at this point)
 
     try {
       // Try to look up dealer by ID (UUID) first
@@ -180,7 +180,8 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       if (dealer) {
-        dealerCode = dealer.code;
+        // Only override dealerCode if dealer.code is a valid non-null string
+        if (dealer.code) dealerCode = dealer.code;
         creditLimit = dealer.credit_limit ?? 0;
         overdueBalance = dealer.overdue_balance ?? 0;
         financialStatus = dealer.financial_status ?? "active";
@@ -193,7 +194,7 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
 
         if (dealerByCode) {
-          dealerCode = dealerByCode.code;
+          if (dealerByCode.code) dealerCode = dealerByCode.code;
           creditLimit = dealerByCode.credit_limit ?? 0;
           overdueBalance = dealerByCode.overdue_balance ?? 0;
           financialStatus = dealerByCode.financial_status ?? "active";
@@ -201,6 +202,14 @@ export async function POST(req: NextRequest) {
       }
     } catch {
       // Non-fatal: proceed with dealer_id as fallback
+    }
+
+    // Final safety check — dealerCode must be a non-empty string
+    if (!dealerCode || typeof dealerCode !== "string") {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: `Unable to resolve dealer identifier from "${dealer_id}"` } },
+        { status: 400 }
+      );
     }
 
     const validation = validateOrderSubmission({
