@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   Banknote,
   ChevronRight,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import {
   Card,
@@ -75,19 +77,42 @@ interface TileProps {
   icon: React.ReactNode;
   accent?: string;
   sub?: string;
+  trend?: number;
 }
 
-function Tile({ label, value, icon, accent = "bg-blue-100 text-blue-700", sub }: TileProps) {
+function Tile({ label, value, icon, accent = "bg-blue-100 text-blue-700", sub, trend }: TileProps) {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-4 p-6">
-        <div className={`rounded-lg p-3 ${accent}`}>{icon}</div>
-        <div className="flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
+    <Card className="border-[#2A2A2A] bg-gradient-to-br from-[#1A1A1A] to-[#111111] overflow-hidden">
+      <CardContent className="flex items-center gap-5 p-6">
+        <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${accent}`}>
+          <span className="[&_svg]:h-7 [&_svg]:w-7">{icon}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
             {label}
           </p>
-          <p className="mt-1 text-2xl font-bold text-white">{value}</p>
-          {sub && <p className="mt-0.5 text-xs text-white/40">{sub}</p>}
+          <p className="mt-1.5 text-3xl font-bold tracking-tight text-white truncate">
+            {value}
+          </p>
+          {trend !== undefined ? (
+            <div
+              className={`mt-1 flex items-center gap-1 text-sm font-semibold ${
+                trend >= 0 ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {trend >= 0 ? (
+                <TrendingUp className="h-4 w-4" />
+              ) : (
+                <TrendingDown className="h-4 w-4" />
+              )}
+              <span>
+                {trend >= 0 ? "+" : ""}
+                {trend.toFixed(1)}%
+              </span>
+            </div>
+          ) : sub ? (
+            <p className="mt-1 text-xs text-white/40">{sub}</p>
+          ) : null}
         </div>
       </CardContent>
     </Card>
@@ -131,8 +156,15 @@ export default function AdminDashboardPage() {
   const stats = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
     const mtdOrders = orders.filter((o) => new Date(o.submitted_at) >= monthStart);
+    const prevMonthOrders = orders.filter((o) => {
+      const d = new Date(o.submitted_at);
+      return d >= prevMonthStart && d <= prevMonthEnd;
+    });
+
     const pendingOrders = orders.filter(
       (o) => o.status === "submitted" || o.status === "under_review"
     );
@@ -142,6 +174,19 @@ export default function AdminDashboardPage() {
     const monthlyRevenue = mtdOrders
       .filter((o) => o.status !== "rejected" && o.status !== "cancelled")
       .reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const prevMonthRevenue = prevMonthOrders
+      .filter((o) => o.status !== "rejected" && o.status !== "cancelled")
+      .reduce((sum, o) => sum + (o.total_amount || 0), 0);
+
+    // % change vs previous month
+    const ordersTrend =
+      prevMonthOrders.length > 0
+        ? ((mtdOrders.length - prevMonthOrders.length) / prevMonthOrders.length) * 100
+        : undefined;
+    const revenueTrend =
+      prevMonthRevenue > 0
+        ? ((monthlyRevenue - prevMonthRevenue) / prevMonthRevenue) * 100
+        : undefined;
 
     return {
       mtdOrders: mtdOrders.length,
@@ -149,6 +194,8 @@ export default function AdminDashboardPage() {
       backorders: backorderOrders.length,
       monthlyRevenue,
       pendingList: pendingOrders.slice(0, 3),
+      ordersTrend,
+      revenueTrend,
     };
   }, [orders]);
 
@@ -172,28 +219,31 @@ export default function AdminDashboardPage() {
         <Tile
           label="Orders (MTD)"
           value={stats.mtdOrders}
-          icon={<ShoppingCart className="h-5 w-5" />}
+          icon={<ShoppingCart />}
           accent="bg-blue-100 text-blue-700"
+          trend={stats.ordersTrend}
           sub="Month-to-date"
         />
         <Tile
           label="Awaiting Review"
           value={stats.pending}
-          icon={<Clock className="h-5 w-5" />}
+          icon={<Clock />}
           accent="bg-amber-100 text-amber-700"
           sub="Submitted or under review"
         />
         <Tile
           label="Back-Order / Partial"
           value={stats.backorders}
-          icon={<AlertTriangle className="h-5 w-5" />}
+          icon={<AlertTriangle />}
           accent="bg-purple-100 text-purple-700"
+          sub="Requires attention"
         />
         <Tile
           label="Monthly Revenue"
           value={formatCurrency(stats.monthlyRevenue)}
-          icon={<Banknote className="h-5 w-5" />}
+          icon={<Banknote />}
           accent="bg-emerald-100 text-emerald-700"
+          trend={stats.revenueTrend}
           sub="MTD, excludes rejected"
         />
       </div>
