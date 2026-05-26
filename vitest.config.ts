@@ -15,6 +15,13 @@ export default defineConfig({
         "src/app/api/registration/**",
       ],
     },
+    deps: {
+      optimizer: {
+        web: {
+          include: ["papaparse"],
+        },
+      },
+    },
   },
   resolve: {
     alias: {

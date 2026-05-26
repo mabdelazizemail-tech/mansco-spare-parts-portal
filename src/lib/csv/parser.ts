@@ -32,6 +32,7 @@ export async function parseCSVFile(file: File): Promise<ParseResult> {
       header: true,
       trimHeaders: true,
       skipEmptyLines: true,
+      worker: false,
       complete: (results) => {
         const errors: string[] = [];
 
