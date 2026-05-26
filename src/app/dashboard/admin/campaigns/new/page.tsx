@@ -7,8 +7,6 @@ import {
   ArrowRight,
   Save,
   Loader2,
-  Plus,
-  Trash2,
   Tag,
   Info,
   Calendar,
@@ -24,6 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import ItemsCSVUpload, { type CampaignItemDraft as CSVCampaignItemDraft } from "@/components/campaign-wizard/items-csv-upload";
 
 type CampaignItemDraft = {
   key: string;
@@ -137,16 +136,6 @@ export default function NewCampaignWizard() {
   const stepIsValid = (id: StepId) => stepErrors[id].length === 0;
   const allValid = STEPS.slice(0, -1).every((s) => stepIsValid(s.id));
 
-  // ── Item helpers ──────────────────────────────────────────────────
-  const addItem = () => {
-    setItems((prev) => [
-      ...prev,
-      { key: newKey(), part_number: "", part_description: "", discount_type: "percentage", discount_value: 0, min_order_quantity: 1 },
-    ]);
-  };
-  const removeItem = (key: string) => setItems((prev) => prev.filter((i) => i.key !== key));
-  const updateItem = (key: string, field: string, value: unknown) =>
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, [field]: value } : i)));
 
   const toggleFinStatus = (val: string) =>
     setFinancialStatus((prev) => (prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]));
@@ -613,91 +602,13 @@ export default function NewCampaignWizard() {
           {/* STEP: ITEMS */}
           {currentStep.id === "items" && (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-white/60">
-                  {validItemsCount} item{validItemsCount !== 1 ? "s" : ""} added
-                </p>
-                <button
-                  onClick={addItem}
-                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-semibold text-white/60 transition hover:border-[#00BFA6]/40 hover:text-[#00BFA6]"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add Item
-                </button>
-              </div>
-
-              {items.map((item, idx) => (
-                <div key={item.key} className="rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Tag className="h-3.5 w-3.5 text-white/30" />
-                      <span className="text-xs font-semibold text-white/40">Item {idx + 1}</span>
-                    </div>
-                    {items.length > 1 && (
-                      <button
-                        onClick={() => removeItem(item.key)}
-                        className="rounded p-1 text-red-400/60 transition hover:bg-red-500/10 hover:text-red-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <div className="col-span-2 sm:col-span-1">
-                      <Label className={labelClass}>Part Number *</Label>
-                      <input
-                        className={fieldClass}
-                        value={item.part_number}
-                        onChange={(e) => updateItem(item.key, "part_number", e.target.value)}
-                        placeholder="e.g. 4253.96"
-                      />
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <Label className={labelClass}>Description</Label>
-                      <input
-                        className={fieldClass}
-                        value={item.part_description}
-                        onChange={(e) => updateItem(item.key, "part_description", e.target.value)}
-                        placeholder="Brake Pad Set"
-                      />
-                    </div>
-                    <div>
-                      <Label className={labelClass}>Discount Type</Label>
-                      <select
-                        className={fieldClass}
-                        value={item.discount_type}
-                        onChange={(e) => updateItem(item.key, "discount_type", e.target.value)}
-                      >
-                        <option value="percentage">Percentage (%)</option>
-                        <option value="fixed">Fixed (EGP)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className={labelClass}>
-                        Value {item.discount_type === "percentage" ? "(%)" : "(EGP)"}
-                      </Label>
-                      <input
-                        type="number"
-                        className={fieldClass}
-                        value={item.discount_value}
-                        onChange={(e) => updateItem(item.key, "discount_value", e.target.value)}
-                        min={0}
-                        max={item.discount_type === "percentage" ? 100 : undefined}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <Label className={labelClass}>Min Order Quantity</Label>
-                    <input
-                      type="number"
-                      className={`${fieldClass} w-32`}
-                      value={item.min_order_quantity}
-                      onChange={(e) => updateItem(item.key, "min_order_quantity", e.target.value)}
-                      min={1}
-                    />
-                  </div>
-                </div>
-              ))}
+              <ItemsCSVUpload
+                onItemsConfirmed={(newItems) => setItems(newItems)}
+                onCancel={undefined}
+              />
+              <p className="text-xs text-white/60 mt-4">
+                {validItemsCount} item{validItemsCount !== 1 ? "s" : ""} added
+              </p>
             </>
           )}
 
