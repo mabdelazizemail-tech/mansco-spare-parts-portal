@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, Download, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { Upload, Download, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { parseCSVFile } from "@/lib/csv/parser";
 import { validateCSVRows, allRowsValid, ValidatedRow } from "@/lib/csv/validator";
 import { generateCampaignItemsTemplate } from "@/lib/csv/template-generator";
