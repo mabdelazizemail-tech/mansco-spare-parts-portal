@@ -345,7 +345,15 @@ export default function ItemsCSVUpload({
                           </button>
                         </div>
                       ) : row.valid ? (
-                        <span className="text-emerald-400 font-semibold">✓ Valid</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-400 font-semibold">✓ Valid</span>
+                          <button
+                            onClick={() => handleStartEdit(idx)}
+                            className="text-xs text-white/40 hover:text-[#00BFA6] hover:underline"
+                          >
+                            Edit
+                          </button>
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleStartEdit(idx)}
