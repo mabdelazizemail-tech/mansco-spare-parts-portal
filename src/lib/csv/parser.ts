@@ -30,6 +30,7 @@ export async function parseCSVFile(file: File): Promise<ParseResult> {
   return new Promise((resolve) => {
     Papa.parse(file, {
       header: true,
+      trimHeaders: true,
       skipEmptyLines: true,
       complete: (results) => {
         const errors: string[] = [];
@@ -41,7 +42,7 @@ export async function parseCSVFile(file: File): Promise<ParseResult> {
 
         // Check for required columns
         if (results.data && results.data.length > 0) {
-          const firstRow = results.data[0] as Record<string, any>;
+          const firstRow = results.data[0] as Record<string, unknown>;
           const missingColumns = REQUIRED_COLUMNS.filter(
             (col) => !(col in firstRow)
           );
@@ -55,7 +56,15 @@ export async function parseCSVFile(file: File): Promise<ParseResult> {
         if (errors.length > 0) {
           resolve({ rows: [], errors });
         } else {
-          resolve({ rows: results.data as Record<string, string>[], errors: [] });
+          // Safely convert all values to strings
+          const validatedRows = (results.data as any[]).map((row) => {
+            const stringRow: Record<string, string> = {};
+            for (const [key, value] of Object.entries(row)) {
+              stringRow[key] = String(value ?? "").trim();
+            }
+            return stringRow;
+          });
+          resolve({ rows: validatedRows, errors: [] });
         }
       },
       error: (err) => {
