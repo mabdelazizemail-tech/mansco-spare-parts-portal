@@ -30,7 +30,7 @@ export async function parseCSVFile(file: File): Promise<ParseResult> {
   return new Promise((resolve) => {
     Papa.parse(file, {
       header: true,
-      trimHeaders: true,
+      transformHeader: (h) => h.trim(),
       skipEmptyLines: true,
       worker: false,
       complete: (results) => {

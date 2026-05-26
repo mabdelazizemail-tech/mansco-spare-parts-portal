@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, Fragment } from "react";
 import { Upload, Download, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { parseCSVFile } from "@/lib/csv/parser";
@@ -35,6 +35,7 @@ export default function ItemsCSVUpload({
   const [validatedRows, setValidatedRows] = useState<ValidatedRow[]>([]);
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Download Template ──────────────────────────────────────────────
   const handleDownloadTemplate = () => {
@@ -112,74 +113,82 @@ export default function ItemsCSVUpload({
     setFileError("");
     setValidatedRows([]);
     setEditingRowIndex(null);
-    document.getElementById("csv-file-input")?.click();
+    fileInputRef.current?.click();
   };
+
+  // ── Always-mounted hidden file input (so re-upload works in any state) ──
+  const hiddenFileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept=".csv"
+      onChange={handleFileSelect}
+      className="hidden"
+    />
+  );
 
   // ── Render empty state ────────────────────────────────────────────
   if (validatedRows.length === 0 && !fileError) {
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-white/60">
-          Download the template, fill it with your items, then upload it here.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-4 py-2.5 text-sm font-semibold text-white/60 transition hover:border-[#00BFA6]/40 hover:text-[#00BFA6]"
-          >
-            <Download className="h-4 w-4" />
-            Download Template
-          </button>
-          <label>
-            <input
-              id="csv-file-input"
-              type="file"
-              accept=".csv"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+      <>
+        {hiddenFileInput}
+        <div className="space-y-4">
+          <p className="text-sm text-white/60">
+            Download the template, fill it with your items, then upload it here.
+          </p>
+          <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => document.getElementById("csv-file-input")?.click()}
+              onClick={handleDownloadTemplate}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-4 py-2.5 text-sm font-semibold text-white/60 transition hover:border-[#00BFA6]/40 hover:text-[#00BFA6]"
+            >
+              <Download className="h-4 w-4" />
+              Download Template
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 rounded-lg bg-[#00BFA6] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[#00BFA6]/90"
             >
               <Upload className="h-4 w-4" />
               Upload CSV
             </button>
-          </label>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // ── Render file error ─────────────────────────────────────────────
   if (fileError) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 flex gap-3">
-          <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-red-400">Upload Error</p>
-            <p className="mt-1 text-xs text-red-400/70">{fileError}</p>
+      <>
+        {hiddenFileInput}
+        <div className="space-y-4">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 flex gap-3">
+            <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-400">Upload Error</p>
+              <p className="mt-1 text-xs text-red-400/70">{fileError}</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleReupload}
+              className="flex items-center gap-2 rounded-lg bg-[#00BFA6] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[#00BFA6]/90"
+            >
+              <Upload className="h-4 w-4" />
+              Re-upload
+            </button>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white/40 transition hover:text-white"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={handleReupload}
-            className="flex items-center gap-2 rounded-lg bg-[#00BFA6] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[#00BFA6]/90"
-          >
-            <Upload className="h-4 w-4" />
-            Re-upload
-          </button>
-          {onCancel && (
-            <button
-              onClick={onCancel}
-              className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white/40 transition hover:text-white"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </div>
+      </>
     );
   }
 
@@ -187,7 +196,9 @@ export default function ItemsCSVUpload({
   const isValid = allRowsValid(validatedRows);
 
   return (
-    <div className="space-y-4">
+    <>
+      {hiddenFileInput}
+      <div className="space-y-4">
       {/* Status banner */}
       {isValid ? (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 flex gap-2">
@@ -237,7 +248,7 @@ export default function ItemsCSVUpload({
             </thead>
             <tbody>
               {validatedRows.map((row, idx) => (
-                <tbody key={row.index}>
+                <Fragment key={row.index}>
                   <tr
                     className={`border-b border-[#2A2A2A] ${
                       row.valid ? "bg-green-500/5" : "bg-red-500/5"
@@ -348,15 +359,15 @@ export default function ItemsCSVUpload({
                   {editingRowIndex !== idx && !row.valid && row.errors.length > 0 && (
                     <tr className="bg-red-500/5">
                       <td colSpan={7} className="px-3 py-2">
-                        <p className="text-xs text-red-400">
+                        <div className="text-xs text-red-400 space-y-0.5">
                           {row.errors.map((err, i) => (
-                            <div key={i}>• {err}</div>
+                            <div key={`${row.index}-${i}`}>• {err}</div>
                           ))}
-                        </p>
+                        </div>
                       </td>
                     </tr>
                   )}
-                </tbody>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -390,14 +401,7 @@ export default function ItemsCSVUpload({
         )}
       </div>
 
-      {/* Hidden file input for re-upload */}
-      <input
-        id="csv-file-input-hidden"
-        type="file"
-        accept=".csv"
-        onChange={handleFileSelect}
-        className="hidden"
-      />
-    </div>
+      </div>
+    </>
   );
 }
