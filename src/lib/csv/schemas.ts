@@ -50,8 +50,12 @@ export function validateCampaignItemRow(
     part_number: row["Part Number"]?.toString().trim() || "",
     part_description: row["Description"]?.toString().trim() || null,
     discount_type: row["Discount Type"]?.toString().trim() || "",
-    discount_value: Number(row["Discount Value"]) || 0,
-    min_order_quantity: Number(row["Min Order Quantity"]) || 0,
+    discount_value: row["Discount Value"] !== undefined && row["Discount Value"] !== ""
+      ? Number(row["Discount Value"])
+      : undefined,
+    min_order_quantity: row["Min Order Quantity"] !== undefined && row["Min Order Quantity"] !== ""
+      ? Number(row["Min Order Quantity"])
+      : undefined,
   });
 
   if (!result.success) {
