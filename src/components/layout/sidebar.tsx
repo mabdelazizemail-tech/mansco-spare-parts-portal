@@ -19,6 +19,7 @@ import {
   ChevronRight,
   UserCheck,
   Database,
+  Package,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { usePortal } from "@/lib/portal-data";
@@ -94,6 +95,7 @@ const adminNav: NavSection[] = [
   {
     label: "SYSTEM",
     items: [
+      { href: "/dashboard/admin/parts", label: "Parts Catalog", icon: Package },
       { href: "/dashboard/admin/sync", label: "SAP CSV Sync", icon: Database },
     ],
   },
