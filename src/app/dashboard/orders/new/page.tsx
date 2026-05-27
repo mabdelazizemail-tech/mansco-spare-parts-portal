@@ -8,6 +8,7 @@ import { PartThumbnail } from "@/components/parts/part-thumbnail";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCart, type CartPartSnapshot, type OrderType } from "@/lib/cart";
+import OrderBulkUpload from "@/components/dealer/order-bulk-upload";
 import {
   ShoppingCart,
   Minus,
@@ -507,6 +508,26 @@ export default function NewOrderPage() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left: search + cart items */}
         <div className="flex-1 space-y-4 min-w-0">
+          {/* Bulk Upload (CSV / Excel) — recommended for multi-item orders */}
+          <details className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] open:bg-[#1A1A1A]" open>
+            <summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 list-none [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-[#00BFA6]/10 p-2">
+                  <Package className="h-4 w-4 text-[#00BFA6]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Bulk Upload (CSV / Excel)</p>
+                  <p className="text-[11px] text-white/40">Upload a file with multiple parts at once — faster than adding one by one</p>
+                </div>
+              </div>
+              <span className="text-xs text-white/40 group-open:hidden">Expand ▾</span>
+              <span className="text-xs text-white/40 hidden group-open:inline">Collapse ▴</span>
+            </summary>
+            <div className="border-t border-[#2A2A2A] px-5 py-4">
+              <OrderBulkUpload />
+            </div>
+          </details>
+
           {/* Quick Add Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
