@@ -70,40 +70,36 @@ describe("checkFinancialBlock", () => {
   });
 });
 
-// ── Order submission validation ──
+// ── Order submission validation (mandatory review policy) ──
 
-describe("validateOrderSubmission", () => {
-  it("auto-approves small orders within credit", () => {
-    const result = validateOrderSubmission({
-      orderTotal: 10000,
+describe("validateOrderSubmission (mandatory admin review)", () => {
+  it("always routes EVERY order to under_review (no auto-approval)", () => {
+    const small = validateOrderSubmission({
+      orderTotal: 10,
       financial: {
         creditLimit: 500000,
         overdueBalance: 0,
         financialStatus: "active",
-        orderTotal: 10000,
+        orderTotal: 10,
       },
     });
-    expect(result.canSubmit).toBe(true);
-    expect(result.needsReview).toBe(false);
-    expect(result.initialStatus).toBe("submitted");
-  });
+    expect(small.canSubmit).toBe(true);
+    expect(small.needsReview).toBe(true);
+    expect(small.initialStatus).toBe("under_review");
 
-  it("routes to review when exceeding auto-approval threshold", () => {
-    const result = validateOrderSubmission({
-      orderTotal: 60000,
+    const large = validateOrderSubmission({
+      orderTotal: 999999,
       financial: {
         creditLimit: 500000,
         overdueBalance: 0,
         financialStatus: "active",
-        orderTotal: 60000,
+        orderTotal: 999999,
       },
     });
-    expect(result.needsReview).toBe(true);
-    expect(result.initialStatus).toBe("under_review");
-    expect(result.reasons.length).toBeGreaterThan(0);
+    expect(large.initialStatus).toBe("under_review");
   });
 
-  it("routes to review when financial block", () => {
+  it("flags financial block in the reasons array for admin visibility", () => {
     const result = validateOrderSubmission({
       orderTotal: 5000,
       financial: {
@@ -113,11 +109,41 @@ describe("validateOrderSubmission", () => {
         orderTotal: 5000,
       },
     });
-    expect(result.needsReview).toBe(true);
     expect(result.financialBlock).toBe(true);
+    expect(result.reasons.length).toBeGreaterThan(0);
+    expect(result.reasons[0]).toMatch(/credit/i);
   });
 
-  it("always allows submission (canSubmit true)", () => {
+  it("flags blocked status in reasons", () => {
+    const result = validateOrderSubmission({
+      orderTotal: 100,
+      financial: {
+        creditLimit: 100000,
+        overdueBalance: 0,
+        financialStatus: "blocked",
+        orderTotal: 100,
+      },
+    });
+    expect(result.financialBlock).toBe(true);
+    expect(result.reasons.some((r) => r.toLowerCase().includes("blocked"))).toBe(true);
+  });
+
+  it("has empty reasons for a clean order (admin still must review)", () => {
+    const result = validateOrderSubmission({
+      orderTotal: 5000,
+      financial: {
+        creditLimit: 500000,
+        overdueBalance: 0,
+        financialStatus: "active",
+        orderTotal: 5000,
+      },
+    });
+    expect(result.financialBlock).toBe(false);
+    expect(result.reasons).toEqual([]);
+    expect(result.needsReview).toBe(true); // mandatory review
+  });
+
+  it("always allows submission (canSubmit true), even with blocks", () => {
     const result = validateOrderSubmission({
       orderTotal: 999999,
       financial: {
@@ -128,7 +154,6 @@ describe("validateOrderSubmission", () => {
       },
     });
     expect(result.canSubmit).toBe(true);
-    // But it will be routed to review
     expect(result.needsReview).toBe(true);
   });
 });
@@ -136,35 +161,52 @@ describe("validateOrderSubmission", () => {
 // ── Status transitions ──
 
 describe("canTransition", () => {
-  it("allows submitted → under_review", () => {
+  it("submitted → under_review", () => {
     expect(canTransition("submitted", "under_review")).toBe(true);
   });
 
-  it("allows submitted → approved", () => {
-    expect(canTransition("submitted", "approved")).toBe(true);
+  it("under_review → pending_dealer_confirmation (admin proposes edits)", () => {
+    expect(canTransition("under_review", "pending_dealer_confirmation")).toBe(true);
   });
 
-  it("allows under_review → approved", () => {
+  it("under_review → approved (admin approves without edits)", () => {
     expect(canTransition("under_review", "approved")).toBe(true);
   });
 
-  it("allows under_review → rejected", () => {
+  it("under_review → rejected", () => {
     expect(canTransition("under_review", "rejected")).toBe(true);
+  });
+
+  it("pending_dealer_confirmation → approved (dealer accepts edits)", () => {
+    expect(canTransition("pending_dealer_confirmation", "approved")).toBe(true);
+  });
+
+  it("pending_dealer_confirmation → cancelled (dealer rejects edits)", () => {
+    expect(canTransition("pending_dealer_confirmation", "cancelled")).toBe(true);
+  });
+
+  it("pending_dealer_confirmation → under_review (admin re-edits after dealer queries)", () => {
+    expect(canTransition("pending_dealer_confirmation", "under_review")).toBe(true);
   });
 
   it("disallows rejected → approved (terminal)", () => {
     expect(canTransition("rejected", "approved")).toBe(false);
   });
 
+  it("disallows cancelled → anything (terminal)", () => {
+    expect(canTransition("cancelled", "approved")).toBe(false);
+    expect(canTransition("cancelled", "under_review")).toBe(false);
+  });
+
   it("disallows delivered → anything (terminal)", () => {
     expect(canTransition("delivered", "shipped")).toBe(false);
   });
 
-  it("allows approved → invoiced", () => {
+  it("approved → invoiced", () => {
     expect(canTransition("approved", "invoiced")).toBe(true);
   });
 
-  it("allows shipped → delivered", () => {
+  it("shipped → delivered", () => {
     expect(canTransition("shipped", "delivered")).toBe(true);
   });
 
@@ -207,12 +249,12 @@ describe("calculateEta / defaultEtaDays", () => {
 
 describe("ORDER_STATUS_TRANSITIONS completeness", () => {
   const allStatuses = [
-    "submitted", "under_review", "approved", "rejected",
-    "partial", "back_ordered", "done", "invoiced", "shipped",
-    "delivered", "cancelled",
+    "submitted", "under_review", "pending_dealer_confirmation",
+    "approved", "rejected", "partial", "back_ordered",
+    "done", "invoiced", "shipped", "delivered", "cancelled",
   ];
 
-  it("has an entry for every status", () => {
+  it("has an entry for every status (including pending_dealer_confirmation)", () => {
     for (const status of allStatuses) {
       expect(ORDER_STATUS_TRANSITIONS).toHaveProperty(status);
     }

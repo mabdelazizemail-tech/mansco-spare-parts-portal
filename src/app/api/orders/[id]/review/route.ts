@@ -3,30 +3,49 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canTransition } from "@/lib/rules/order-validation";
 
 /**
- * POST /api/orders/[id]/review — admin approve/reject/partial approve
- * Body: { action: "approve"|"reject"|"partial_approve", reviewer_id, notes?, line_decisions?: { line_id, action, qty_confirmed? }[] }
+ * POST /api/orders/[id]/review — admin actions on an order under review.
+ *
+ * Supported actions:
+ *   - approve         → status: approved (legacy path; skips dealer confirmation)
+ *   - reject          → status: rejected (terminal)
+ *   - partial_approve → status: partial (line-level confirm/backorder/reject)
+ *   - propose_edits   → status: pending_dealer_confirmation
+ *                       (admin edits per-line qty, dealer must confirm)
+ *   - request_info    → status unchanged, logged for the timeline
+ *
+ * Body shape:
+ *   {
+ *     action: <see above>,
+ *     reviewer_id: string,
+ *     notes?: string,
+ *     line_decisions?: [...]    // partial_approve only
+ *     line_proposals?: [        // propose_edits only
+ *       { line_id: string, quantity_proposed: number }
+ *     ]
+ *   }
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
   try {
     const body = await req.json();
-    const { action, reviewer_id, notes, line_decisions } = body ?? {};
+    const { action, reviewer_id, notes, line_decisions, line_proposals } = body ?? {};
 
     if (!action || !reviewer_id) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "action and reviewer_id are required" } },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (!["approve", "reject", "partial_approve", "request_info"].includes(action)) {
+    const validActions = ["approve", "reject", "partial_approve", "propose_edits", "request_info"];
+    if (!validActions.includes(action)) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Invalid action" } },
-        { status: 400 }
+        { error: { code: "VALIDATION_ERROR", message: `Invalid action. Must be one of: ${validActions.join(", ")}` } },
+        { status: 400 },
       );
     }
 
@@ -41,7 +60,7 @@ export async function POST(
     if (!order) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Order not found" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -57,15 +76,51 @@ export async function POST(
       case "partial_approve":
         newStatus = "partial";
         break;
-      default:
-        newStatus = order.status; // request_info doesn't change status
+      case "propose_edits":
+        newStatus = "pending_dealer_confirmation";
+        break;
+      default: // request_info
+        newStatus = order.status;
     }
 
     if (newStatus !== order.status && !canTransition(order.status, newStatus)) {
       return NextResponse.json(
-        { error: { code: "INVALID_TRANSITION", message: `Cannot transition from ${order.status} to ${newStatus}` } },
-        { status: 400 }
+        {
+          error: {
+            code: "INVALID_TRANSITION",
+            message: `Cannot transition from ${order.status} to ${newStatus}`,
+          },
+        },
+        { status: 400 },
       );
+    }
+
+    // Validate propose_edits body shape
+    if (action === "propose_edits") {
+      if (!Array.isArray(line_proposals) || line_proposals.length === 0) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "propose_edits requires line_proposals: [{ line_id, quantity_proposed }]",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      for (const lp of line_proposals) {
+        if (!lp.line_id || typeof lp.quantity_proposed !== "number" || lp.quantity_proposed < 0) {
+          return NextResponse.json(
+            {
+              error: {
+                code: "VALIDATION_ERROR",
+                message: "Each line_proposal needs a line_id and a non-negative quantity_proposed",
+              },
+            },
+            { status: 400 },
+          );
+        }
+      }
     }
 
     // Update order status
@@ -87,7 +142,23 @@ export async function POST(
 
     if (updateError) throw updateError;
 
-    // Handle line-level decisions for partial approve
+    // Apply propose_edits — write each proposed qty into the existing
+    // quantity_confirmed column. Once the dealer accepts, that value is
+    // already the agreed quantity; if they reject, the order is cancelled
+    // and the value doesn't matter.
+    if (action === "propose_edits" && Array.isArray(line_proposals)) {
+      for (const lp of line_proposals) {
+        await supabaseAdmin
+          .from("order_lines")
+          .update({
+            quantity_confirmed: lp.quantity_proposed,
+            line_status: "pending_dealer_confirmation",
+          })
+          .eq("id", lp.line_id);
+      }
+    }
+
+    // partial_approve line decisions (unchanged behaviour)
     if (action === "partial_approve" && Array.isArray(line_decisions)) {
       for (const ld of line_decisions) {
         const lineUpdate: Record<string, unknown> = {};
@@ -109,7 +180,7 @@ export async function POST(
       }
     }
 
-    // If full approve, confirm all lines
+    // Full approve → confirm all lines at requested qty
     if (action === "approve") {
       const { data: lines } = await supabaseAdmin
         .from("order_lines")
@@ -125,7 +196,7 @@ export async function POST(
       }
     }
 
-    // Log approval action
+    // Log the approval action
     await supabaseAdmin.from("order_approvals").insert({
       order_id: id,
       reviewer_id,
@@ -134,9 +205,11 @@ export async function POST(
     });
 
     // Timeline event
-    const eventLabel = action === "approve" ? "Order approved"
+    const eventLabel =
+      action === "approve" ? "Order approved"
       : action === "reject" ? "Order rejected"
       : action === "partial_approve" ? "Partially approved"
+      : action === "propose_edits" ? "Edits proposed — awaiting dealer confirmation"
       : "Info requested";
 
     await supabaseAdmin.from("order_timeline").insert({
@@ -158,8 +231,13 @@ export async function POST(
     });
   } catch (e) {
     return NextResponse.json(
-      { error: { code: "SERVER_ERROR", message: e instanceof Error ? e.message : "Unexpected error" } },
-      { status: 500 }
+      {
+        error: {
+          code: "SERVER_ERROR",
+          message: e instanceof Error ? e.message : "Unexpected error",
+        },
+      },
+      { status: 500 },
     );
   }
 }

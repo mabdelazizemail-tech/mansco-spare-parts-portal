@@ -29,6 +29,7 @@ function statusTone(status: string): ToneColor {
     back_ordered: "accent", invoiced: "info", shipped: "info",
     delivered: "success", cancelled: "destructive",
     pending: "muted", confirmed: "success", backordered: "accent",
+    pending_dealer_confirmation: "warning",
   };
   return map[status] ?? "muted";
 }
@@ -106,6 +107,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [reviewLoading, setReviewLoading] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [dealerName, setDealerName] = useState<string | null>(null);
+  // ── Phase 2: admin propose-edits + dealer accept/reject ──
+  const [proposeMode, setProposeMode] = useState(false);
+  const [proposedQty, setProposedQty] = useState<Record<string, number>>({});
+  const [dealerActionLoading, setDealerActionLoading] = useState(false);
+  const [dealerActionError, setDealerActionError] = useState("");
 
   // Get user role from session
   useEffect(() => {
@@ -183,6 +189,74 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  // ── Admin: propose per-line quantity edits and send back to dealer ──
+  const enterProposeMode = () => {
+    if (!order) return;
+    // Default each proposed qty to the originally requested qty so admin only
+    // needs to change what's different.
+    const seed: Record<string, number> = {};
+    for (const line of order.order_lines) {
+      seed[line.id] = line.quantity_requested;
+    }
+    setProposedQty(seed);
+    setProposeMode(true);
+  };
+
+  const handleProposeEdits = async () => {
+    if (!order) return;
+    setReviewLoading(true);
+    try {
+      const line_proposals = order.order_lines.map((l) => ({
+        line_id: l.id,
+        quantity_proposed: proposedQty[l.id] ?? l.quantity_requested,
+      }));
+      const res = await fetch(`/api/orders/${order.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "propose_edits",
+          reviewer_id: "admin",
+          notes: reviewNotes || undefined,
+          line_proposals,
+        }),
+      });
+      if (res.ok) {
+        setProposeMode(false);
+        setReviewNotes("");
+        fetchOrder();
+      }
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  // ── Dealer: accept/reject the admin's proposed edits ──
+  const handleDealerConfirm = async (action: "accept" | "reject") => {
+    if (!order) return;
+    setDealerActionLoading(true);
+    setDealerActionError("");
+    try {
+      const res = await fetch(`/api/orders/${order.id}/dealer-confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          notes: action === "reject" ? reviewNotes || undefined : undefined,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error?.message || "Action failed");
+      }
+      setReviewNotes("");
+      fetchOrder();
+    } catch (e) {
+      setDealerActionError(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setDealerActionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -204,6 +278,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const isUnderReview = order.status === "under_review" || order.status === "submitted";
+  const isPendingDealerConfirmation = order.status === "pending_dealer_confirmation";
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
+  const isDealer = userRole === "dealer" || userRole === "sub_dealer";
 
   return (
     <div className="space-y-6">
@@ -240,8 +317,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <div className="flex items-center gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-5 py-4">
           <AlertTriangle className="h-5 w-5 text-yellow-400 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-yellow-400">Pending Review</p>
-            <p className="text-xs text-yellow-400/70">This order requires admin approval before processing.</p>
+            <p className="text-sm font-semibold text-yellow-400">Pending Admin Review</p>
+            <p className="text-xs text-yellow-400/70">
+              {isAdmin
+                ? "Review this order. You can approve as-is, reject, or propose per-line quantity changes and send back to the dealer."
+                : "This order is waiting for an admin to review. You'll be notified if they propose any changes."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Pending dealer confirmation — admin has proposed edits */}
+      {isPendingDealerConfirmation && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-4">
+          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-400">
+              {isDealer ? "Admin Proposed Changes — Action Required" : "Awaiting Dealer Confirmation"}
+            </p>
+            <p className="text-xs text-amber-400/70">
+              {isDealer
+                ? "An admin has proposed quantity changes to your order. Review the proposed quantities below and accept or reject."
+                : "The dealer has been notified of the proposed changes and must accept or reject before processing continues."}
+            </p>
           </div>
         </div>
       )}
@@ -289,12 +387,43 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       </div>
                     </td>
                     <td className="px-5 py-3 text-center">
-                      <span className="text-white">{line.quantity_requested}</span>
-                      {line.quantity_confirmed > 0 && line.quantity_confirmed < line.quantity_requested && (
-                        <span className="block text-[10px] text-yellow-400">{line.quantity_confirmed} confirmed</span>
-                      )}
-                      {line.quantity_backordered > 0 && (
-                        <span className="block text-[10px] text-blue-400">{line.quantity_backordered} backordered</span>
+                      {/* Admin in propose-edits mode: show editable qty input */}
+                      {proposeMode && isAdmin ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            value={proposedQty[line.id] ?? line.quantity_requested}
+                            onChange={(e) =>
+                              setProposedQty((p) => ({
+                                ...p,
+                                [line.id]: Math.max(0, Number(e.target.value) || 0),
+                              }))
+                            }
+                            className="h-8 w-20 rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 text-center text-sm text-white focus:border-[#00BFA6] focus:outline-none"
+                          />
+                          <span className="text-[10px] text-white/40">requested: {line.quantity_requested}</span>
+                        </div>
+                      ) : isPendingDealerConfirmation ? (
+                        // Dealer-confirmation state: show requested vs proposed comparison
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`text-sm ${line.quantity_confirmed !== line.quantity_requested ? "text-amber-400 font-semibold" : "text-white"}`}>
+                            {line.quantity_confirmed}
+                          </span>
+                          {line.quantity_confirmed !== line.quantity_requested && (
+                            <span className="text-[10px] text-white/40 line-through">requested: {line.quantity_requested}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-white">{line.quantity_requested}</span>
+                          {line.quantity_confirmed > 0 && line.quantity_confirmed < line.quantity_requested && (
+                            <span className="block text-[10px] text-yellow-400">{line.quantity_confirmed} confirmed</span>
+                          )}
+                          {line.quantity_backordered > 0 && (
+                            <span className="block text-[10px] text-blue-400">{line.quantity_backordered} backordered</span>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-5 py-3">
@@ -353,14 +482,50 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* Admin Review Actions — Only visible to admins */}
-          {isUnderReview && (userRole === "admin" || userRole === "super_admin") && (
+          {/* Admin Review Actions — Only visible to admins, only while under_review */}
+          {isUnderReview && isAdmin && (
             <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
               <h3 className="font-semibold text-white">Review Actions</h3>
-              {reviewAction ? (
+
+              {proposeMode ? (
                 <div className="space-y-3">
                   <p className="text-sm text-white/60">
-                    {reviewAction === "approve" ? "Approve this order?" : reviewAction === "reject" ? "Reject this order?" : "Partially approve?"}
+                    Adjust the quantities above to match what you can actually fulfil. The dealer will see your proposed quantities and must accept or reject before the order proceeds.
+                  </p>
+                  <textarea
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    placeholder="Optional note to the dealer (e.g. 'replaced with equivalent part')..."
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] p-3 text-sm text-white placeholder:text-white/30 min-h-[60px]"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleProposeEdits}
+                      disabled={reviewLoading}
+                      className="bg-amber-600 hover:bg-amber-700"
+                    >
+                      {reviewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                      Send to Dealer for Confirmation
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setProposeMode(false); setReviewNotes(""); }}
+                      className="border-[#2A2A2A] text-white/60"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : reviewAction ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-white/60">
+                    {reviewAction === "approve"
+                      ? "Approve this order as-is (no edits)?"
+                      : reviewAction === "reject"
+                      ? "Reject this order?"
+                      : "Partially approve?"}
                   </p>
                   <textarea
                     value={reviewNotes}
@@ -390,18 +555,64 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-3">
-                  <Button className="gap-2 bg-green-600 hover:bg-green-700" onClick={() => setReviewAction("approve")}>
-                    <CheckCircle className="h-4 w-4" /> Approve
-                  </Button>
-                  <Button variant="outline" className="gap-2 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10" onClick={() => setReviewAction("partial_approve")}>
-                    Partial Approve
-                  </Button>
-                  <Button variant="outline" className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => setReviewAction("reject")}>
-                    <XCircle className="h-4 w-4" /> Reject
-                  </Button>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-3">
+                    <Button className="gap-2 bg-amber-600 hover:bg-amber-700" onClick={enterProposeMode}>
+                      <FileText className="h-4 w-4" /> Propose Edits & Send to Dealer
+                    </Button>
+                    <Button variant="outline" className="gap-2 border-green-500/30 text-green-400 hover:bg-green-500/10" onClick={() => setReviewAction("approve")}>
+                      <CheckCircle className="h-4 w-4" /> Approve As-Is
+                    </Button>
+                    <Button variant="outline" className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => setReviewAction("reject")}>
+                      <XCircle className="h-4 w-4" /> Reject
+                    </Button>
+                  </div>
+                  <p className="text-xs text-white/40">
+                    <strong className="text-amber-400">Propose Edits</strong> lets you adjust per-line quantities and send back to the dealer for final confirmation.
+                  </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Dealer Confirmation Actions — visible only while pending_dealer_confirmation */}
+          {isPendingDealerConfirmation && isDealer && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
+              <h3 className="font-semibold text-white">Confirm Admin's Proposed Changes</h3>
+              <p className="text-sm text-white/60">
+                Review the proposed quantities in the order lines above. Accept to confirm the order at the adjusted quantities, or reject to cancel.
+              </p>
+
+              {/* Optional rejection note */}
+              <textarea
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder="Optional: reason for rejection (helps the admin understand)..."
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] p-3 text-sm text-white placeholder:text-white/30 min-h-[60px]"
+              />
+
+              {dealerActionError && (
+                <p className="text-xs text-red-400">{dealerActionError}</p>
+              )}
+
+              <div className="flex gap-3">
+                <Button
+                  className="gap-2 bg-green-600 hover:bg-green-700"
+                  onClick={() => handleDealerConfirm("accept")}
+                  disabled={dealerActionLoading}
+                >
+                  {dealerActionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                  <CheckCircle className="h-4 w-4" /> Accept & Confirm Order
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  onClick={() => handleDealerConfirm("reject")}
+                  disabled={dealerActionLoading}
+                >
+                  <XCircle className="h-4 w-4" /> Reject & Cancel Order
+                </Button>
+              </div>
             </div>
           )}
         </div>
