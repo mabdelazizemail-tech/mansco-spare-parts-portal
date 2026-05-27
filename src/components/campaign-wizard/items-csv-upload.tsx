@@ -1,23 +1,25 @@
 "use client";
 
-import { useState, useRef, Fragment } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { Upload, Download, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { parseCSVFile } from "@/lib/csv/parser";
-import { validateCSVRows, allRowsValid, ValidatedRow } from "@/lib/csv/validator";
+import { validateCSVRows, allRowsValid, type ValidatedRow } from "@/lib/csv/validator";
 import { generateCampaignItemsTemplate } from "@/lib/csv/template-generator";
 import { downloadCSV } from "@/utils/csv-download";
+import type { DiscountType } from "@/lib/csv/schemas";
 
 export type CampaignItemDraft = {
   key: string;
   part_number: string;
   part_description: string;
-  discount_type: "percentage" | "fixed";
+  discount_type: DiscountType;
   discount_value: number;
   min_order_quantity: number;
 };
 
 interface ItemsCSVUploadProps {
+  discountType: DiscountType;
   onItemsConfirmed: (items: CampaignItemDraft[]) => void;
   onCancel?: () => void;
 }
@@ -28,6 +30,7 @@ function newKey() {
 }
 
 export default function ItemsCSVUpload({
+  discountType,
   onItemsConfirmed,
   onCancel,
 }: ItemsCSVUploadProps) {
@@ -36,6 +39,20 @@ export default function ItemsCSVUpload({
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Re-validate when the campaign-level discount type changes (e.g. user
+  // toggles from Percentage → Fixed in the wizard after uploading)
+  useEffect(() => {
+    if (validatedRows.length === 0) return;
+    setValidatedRows((prev) =>
+      validateCSVRows(
+        prev.map((r) => r.data),
+        discountType,
+      ),
+    );
+    // intentionally exclude validatedRows from deps to avoid an infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discountType]);
 
   // ── Download Template ──────────────────────────────────────────────
   const handleDownloadTemplate = () => {
@@ -52,16 +69,17 @@ export default function ItemsCSVUpload({
     setValidatedRows([]);
     setEditingRowIndex(null);
 
-    // Parse CSV
     const parseResult = await parseCSVFile(file);
     if (parseResult.errors.length > 0) {
       setFileError(parseResult.errors.join("; "));
+      // Reset the input so re-selecting the same file fires onChange again
+      e.target.value = "";
       return;
     }
 
-    // Validate rows
-    const validated = validateCSVRows(parseResult.rows);
+    const validated = validateCSVRows(parseResult.rows, discountType);
     setValidatedRows(validated);
+    e.target.value = "";
   };
 
   // ── Handle Row Edit ────────────────────────────────────────────────
@@ -77,9 +95,9 @@ export default function ItemsCSVUpload({
 
   const handleSaveEdit = (rowIndex: number) => {
     const updatedRows = [...validatedRows];
-    const validated = validateCSVRows([editingValues]);
+    const [revalidated] = validateCSVRows([editingValues], discountType);
     updatedRows[rowIndex] = {
-      ...validated[0],
+      ...revalidated,
       index: rowIndex + 1,
     };
     setValidatedRows(updatedRows);
@@ -98,9 +116,7 @@ export default function ItemsCSVUpload({
       key: newKey(),
       part_number: row.data["Part Number"].trim(),
       part_description: row.data["Description"]?.trim() || "",
-      discount_type: (row.data["Discount Type"]
-        .toLowerCase()
-        .trim() as "percentage" | "fixed"),
+      discount_type: discountType,
       discount_value: Number(row.data["Discount Value"]),
       min_order_quantity: Number(row.data["Min Order Quantity"]),
     }));
@@ -116,16 +132,18 @@ export default function ItemsCSVUpload({
     fileInputRef.current?.click();
   };
 
-  // ── Always-mounted hidden file input (so re-upload works in any state) ──
+  // ── Always-mounted hidden file input ──
   const hiddenFileInput = (
     <input
       ref={fileInputRef}
       type="file"
-      accept=".csv"
+      accept=".csv,.xlsx,.xls"
       onChange={handleFileSelect}
       className="hidden"
     />
   );
+
+  const valueColumnHeader = discountType === "percentage" ? "Discount %" : "Fixed Amount (EGP)";
 
   // ── Render empty state ────────────────────────────────────────────
   if (validatedRows.length === 0 && !fileError) {
@@ -134,7 +152,7 @@ export default function ItemsCSVUpload({
         {hiddenFileInput}
         <div className="space-y-4">
           <p className="text-sm text-white/60">
-            Download the template, fill it with your items, then upload it here.
+            Download the template, fill it with your items, then upload it here. Supports both <strong>CSV</strong> and <strong>Excel (.xlsx)</strong> files.
           </p>
           <div className="flex flex-wrap gap-3">
             <button
@@ -149,7 +167,7 @@ export default function ItemsCSVUpload({
               className="flex items-center gap-2 rounded-lg bg-[#00BFA6] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[#00BFA6]/90"
             >
               <Upload className="h-4 w-4" />
-              Upload CSV
+              Upload CSV / Excel
             </button>
           </div>
         </div>
@@ -194,6 +212,7 @@ export default function ItemsCSVUpload({
 
   // ── Render preview table ──────────────────────────────────────────
   const isValid = allRowsValid(validatedRows);
+  const invalidCount = validatedRows.filter((r) => !r.valid).length;
 
   return (
     <>
@@ -211,8 +230,7 @@ export default function ItemsCSVUpload({
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex gap-2">
           <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-red-400">
-            {validatedRows.filter((r) => !r.valid).length} item{validatedRows.filter((r) => !r.valid).length !== 1 ? "s" : ""} need
-            to be fixed
+            {invalidCount} item{invalidCount !== 1 ? "s" : ""} need to be fixed
           </p>
         </div>
       )}
@@ -223,46 +241,25 @@ export default function ItemsCSVUpload({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2A2A2A]">
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Row
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Part Number
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Description
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Type
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Value
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Min Qty
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">
-                  Status
-                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">Row</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">Part Number</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">Description</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">{valueColumnHeader}</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">Min Qty</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold uppercase text-white/40">Status</th>
               </tr>
             </thead>
             <tbody>
               {validatedRows.map((row, idx) => (
                 <Fragment key={row.index}>
-                  <tr
-                    className={`border-b border-[#2A2A2A] ${
-                      row.valid ? "bg-green-500/5" : "bg-red-500/5"
-                    }`}
-                  >
+                  <tr className={`border-b border-[#2A2A2A] ${row.valid ? "bg-green-500/5" : "bg-red-500/5"}`}>
                     <td className="px-3 py-3 text-xs text-white/60">{row.index}</td>
                     <td className="px-3 py-3 text-xs text-white">
                       {editingRowIndex === idx ? (
                         <input
                           type="text"
                           value={editingValues["Part Number"] || ""}
-                          onChange={(e) =>
-                            handleEditChange("Part Number", e.target.value)
-                          }
+                          onChange={(e) => handleEditChange("Part Number", e.target.value)}
                           className="h-8 w-full rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 text-xs text-white placeholder:text-white/30 focus:border-[#00BFA6] focus:outline-none"
                         />
                       ) : (
@@ -274,9 +271,7 @@ export default function ItemsCSVUpload({
                         <input
                           type="text"
                           value={editingValues["Description"] || ""}
-                          onChange={(e) =>
-                            handleEditChange("Description", e.target.value)
-                          }
+                          onChange={(e) => handleEditChange("Description", e.target.value)}
                           className="h-8 w-full rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 text-xs text-white placeholder:text-white/30 focus:border-[#00BFA6] focus:outline-none"
                         />
                       ) : (
@@ -285,33 +280,17 @@ export default function ItemsCSVUpload({
                     </td>
                     <td className="px-3 py-3 text-xs text-white">
                       {editingRowIndex === idx ? (
-                        <select
-                          value={editingValues["Discount Type"] || ""}
-                          onChange={(e) =>
-                            handleEditChange("Discount Type", e.target.value)
-                          }
-                          className="h-8 rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 text-xs text-white focus:border-[#00BFA6] focus:outline-none"
-                        >
-                          <option value="">Select</option>
-                          <option value="Percentage">Percentage</option>
-                          <option value="Fixed">Fixed</option>
-                        </select>
-                      ) : (
-                        row.data["Discount Type"]
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-xs text-white">
-                      {editingRowIndex === idx ? (
                         <input
                           type="number"
                           value={editingValues["Discount Value"] || ""}
-                          onChange={(e) =>
-                            handleEditChange("Discount Value", e.target.value)
-                          }
+                          onChange={(e) => handleEditChange("Discount Value", e.target.value)}
                           className="h-8 w-20 rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 text-xs text-white placeholder:text-white/30 focus:border-[#00BFA6] focus:outline-none"
                         />
                       ) : (
-                        row.data["Discount Value"]
+                        <>
+                          {row.data["Discount Value"]}
+                          <span className="ml-1 text-white/40">{discountType === "percentage" ? "%" : "EGP"}</span>
+                        </>
                       )}
                     </td>
                     <td className="px-3 py-3 text-xs text-white">
@@ -319,9 +298,7 @@ export default function ItemsCSVUpload({
                         <input
                           type="number"
                           value={editingValues["Min Order Quantity"] || ""}
-                          onChange={(e) =>
-                            handleEditChange("Min Order Quantity", e.target.value)
-                          }
+                          onChange={(e) => handleEditChange("Min Order Quantity", e.target.value)}
                           className="h-8 w-16 rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 text-xs text-white placeholder:text-white/30 focus:border-[#00BFA6] focus:outline-none"
                         />
                       ) : (
@@ -366,7 +343,7 @@ export default function ItemsCSVUpload({
                   </tr>
                   {editingRowIndex !== idx && !row.valid && row.errors.length > 0 && (
                     <tr className="bg-red-500/5">
-                      <td colSpan={7} className="px-3 py-2">
+                      <td colSpan={6} className="px-3 py-2">
                         <div className="text-xs text-red-400 space-y-0.5">
                           {row.errors.map((err, i) => (
                             <div key={`${row.index}-${i}`}>• {err}</div>

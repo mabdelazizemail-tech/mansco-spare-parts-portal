@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { generateCampaignItemsTemplate } from "@/lib/csv/template-generator";
 
+/**
+ * The template now has 4 columns — Discount Type is set at the campaign level
+ * (in the wizard), not per row.
+ */
 describe("CSV Template Generator", () => {
   it("should generate valid CSV template", () => {
     const template = generateCampaignItemsTemplate();
@@ -9,150 +13,101 @@ describe("CSV Template Generator", () => {
     expect(typeof template).toBe("string");
     expect(template).toContain("Part Number");
     expect(template).toContain("Description");
-    expect(template).toContain("Discount Type");
     expect(template).toContain("Discount Value");
     expect(template).toContain("Min Order Quantity");
   });
 
-  it("should have all required columns in header", () => {
+  it("should NOT contain a Discount Type column (campaign-level now)", () => {
     const template = generateCampaignItemsTemplate();
-
-    const lines = template.split("\n");
-    const header = lines[0];
-
+    const header = template.split("\n")[0];
     const columns = header.split(",");
 
-    expect(columns).toContain("Part Number");
-    expect(columns).toContain("Description");
-    expect(columns).toContain("Discount Type");
-    expect(columns).toContain("Discount Value");
-    expect(columns).toContain("Min Order Quantity");
-    expect(columns).toHaveLength(5);
+    expect(columns).not.toContain("Discount Type");
   });
 
-  it("should include example rows", () => {
+  it("should have exactly 4 columns in header", () => {
     const template = generateCampaignItemsTemplate();
+    const header = template.split("\n")[0];
+    const columns = header.split(",");
 
-    expect(template).toContain("PSA-4249.34");
-    expect(template).toContain("Brake Pad Set");
-    expect(template).toContain("Percentage");
-    expect(template).toContain("10");
+    expect(columns).toEqual(["Part Number", "Description", "Discount Value", "Min Order Quantity"]);
+    expect(columns).toHaveLength(4);
   });
 
-  it("should include multiple example rows", () => {
+  it("should include 3 example rows", () => {
     const template = generateCampaignItemsTemplate();
-
-    expect(template).toContain("PSA-4249.34");
-    expect(template).toContain("PSA-1234.56");
-    expect(template).toContain("PSA-7890.12");
-    expect(template).toContain("Oil Filter");
-    expect(template).toContain("Air Filter");
-  });
-
-  it("should have correct example values", () => {
-    const template = generateCampaignItemsTemplate();
-
-    expect(template).toContain("PSA-4249.34,Brake Pad Set,Percentage,10,1");
-    expect(template).toContain("PSA-1234.56,Oil Filter,Fixed,150,2");
-    expect(template).toContain("PSA-7890.12,Air Filter,Percentage,15,1");
-  });
-
-  it("should have header as first line", () => {
-    const template = generateCampaignItemsTemplate();
-
-    const lines = template.split("\n");
-
-    expect(lines[0]).toBe("Part Number,Description,Discount Type,Discount Value,Min Order Quantity");
-  });
-
-  it("should have 3 example data rows", () => {
-    const template = generateCampaignItemsTemplate();
-
     const lines = template.split("\n");
 
     expect(lines.length).toBe(4); // 1 header + 3 examples
   });
 
-  it("should generate template with proper CSV formatting", () => {
+  it("should include canonical example part numbers", () => {
     const template = generateCampaignItemsTemplate();
 
+    expect(template).toContain("PSA-4249.34");
+    expect(template).toContain("PSA-1234.56");
+    expect(template).toContain("PSA-7890.12");
+    expect(template).toContain("Brake Pad Set");
+    expect(template).toContain("Oil Filter");
+    expect(template).toContain("Air Filter");
+  });
+
+  it("should have correctly formatted example rows", () => {
+    const template = generateCampaignItemsTemplate();
+
+    expect(template).toContain("PSA-4249.34,Brake Pad Set,10,1");
+    expect(template).toContain("PSA-1234.56,Oil Filter,15,2");
+    expect(template).toContain("PSA-7890.12,Air Filter,5,1");
+  });
+
+  it("should have header as first line", () => {
+    const template = generateCampaignItemsTemplate();
     const lines = template.split("\n");
 
-    // Verify no trailing newlines that would create empty lines
-    expect(lines[lines.length - 1]).not.toBe("");
+    expect(lines[0]).toBe("Part Number,Description,Discount Value,Min Order Quantity");
+  });
 
-    // Verify each line has 5 comma-separated values
+  it("should have exactly 3 commas per line (4 fields)", () => {
+    const template = generateCampaignItemsTemplate();
+    const lines = template.split("\n");
+
     for (const line of lines) {
-      const fields = line.split(",");
-      expect(fields).toHaveLength(5);
+      const commaCount = (line.match(/,/g) || []).length;
+      expect(commaCount).toBe(3);
     }
   });
 
-  it("should have percentage discount examples", () => {
+  it("should have no trailing newline that creates empty rows", () => {
     const template = generateCampaignItemsTemplate();
+    const lines = template.split("\n");
 
-    expect(template).toContain("Percentage");
-    const percentageMatches = (template.match(/Percentage/g) || []).length;
-    expect(percentageMatches).toBeGreaterThanOrEqual(2);
-  });
-
-  it("should have fixed discount examples", () => {
-    const template = generateCampaignItemsTemplate();
-
-    expect(template).toContain("Fixed");
+    expect(lines[lines.length - 1]).not.toBe("");
   });
 
   it("should have valid numeric values for discount and quantity", () => {
     const template = generateCampaignItemsTemplate();
+    const dataLines = template.split("\n").slice(1);
 
-    const lines = template.split("\n").slice(1); // Skip header
-
-    for (const line of lines) {
-      const [, , , discountValue, minQty] = line.split(",");
+    for (const line of dataLines) {
+      const [, , discountValue, minQty] = line.split(",");
       expect(Number(discountValue)).toBeGreaterThan(0);
       expect(Number(minQty)).toBeGreaterThanOrEqual(1);
     }
   });
 
-  it("should generate consistent output", () => {
-    const template1 = generateCampaignItemsTemplate();
-    const template2 = generateCampaignItemsTemplate();
-
-    expect(template1).toBe(template2);
+  it("should generate consistent output across calls", () => {
+    expect(generateCampaignItemsTemplate()).toBe(generateCampaignItemsTemplate());
   });
 
-  it("should be downloadable as CSV string", () => {
+  it("should have no leading or trailing whitespace in values", () => {
     const template = generateCampaignItemsTemplate();
-
-    // Should be able to be used directly as CSV content
-    expect(template.length).toBeGreaterThan(0);
-    expect(template.includes("\n")).toBe(true);
-    expect(template.split(",").length).toBeGreaterThan(5);
-  });
-
-  it("should follow proper CSV format without extra commas", () => {
-    const template = generateCampaignItemsTemplate();
-
-    const lines = template.split("\n");
-    for (const line of lines) {
-      // Each line should have exactly 4 commas (separating 5 fields)
-      const commaCount = (line.match(/,/g) || []).length;
-      expect(commaCount).toBe(4);
-    }
-  });
-
-  it("should contain no trailing or leading whitespace in values", () => {
-    const template = generateCampaignItemsTemplate();
-
-    // Check that values are properly formatted without extra spaces
-    const lines = template.split("\n");
-    const dataLines = lines.slice(1); // Skip header
+    const dataLines = template.split("\n").slice(1);
 
     for (const line of dataLines) {
       const values = line.split(",");
       for (const value of values) {
-        expect(value).not.toMatch(/^\s/);  // No leading whitespace
-        expect(value).not.toMatch(/\s$/);  // No trailing whitespace
+        expect(value).not.toMatch(/^\s/);
+        expect(value).not.toMatch(/\s$/);
       }
     }
   });

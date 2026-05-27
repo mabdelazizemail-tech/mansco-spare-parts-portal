@@ -22,13 +22,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import ItemsCSVUpload, { type CampaignItemDraft as CSVCampaignItemDraft } from "@/components/campaign-wizard/items-csv-upload";
+import ItemsCSVUpload from "@/components/campaign-wizard/items-csv-upload";
+import type { DiscountType } from "@/lib/csv/schemas";
 
 type CampaignItemDraft = {
   key: string;
   part_number: string;
   part_description: string;
-  discount_type: "percentage" | "fixed";
+  discount_type: DiscountType;
   discount_value: number;
   min_order_quantity: number;
 };
@@ -36,11 +37,6 @@ type CampaignItemDraft = {
 const fieldClass =
   "h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 text-sm text-white placeholder:text-white/30 focus:border-[#00BFA6] focus:outline-none focus:ring-1 focus:ring-[#00BFA6]/30";
 const labelClass = "text-xs font-semibold uppercase tracking-wider text-white/50";
-
-let keyCounter = 0;
-function newKey() {
-  return `item-${++keyCounter}`;
-}
 
 type StepId = "basics" | "schedule" | "audience" | "eligibility" | "items" | "review";
 
@@ -79,9 +75,8 @@ export default function NewCampaignWizard() {
   const [minTargetPct, setMinTargetPct] = useState("");
   const [financialStatus, setFinancialStatus] = useState<string[]>(["active"]);
   const [orderTypes, setOrderTypes] = useState<string[]>([]);
-  const [items, setItems] = useState<CampaignItemDraft[]>([
-    { key: newKey(), part_number: "", part_description: "", discount_type: "percentage", discount_value: 0, min_order_quantity: 1 },
-  ]);
+  const [discountType, setDiscountType] = useState<DiscountType>("percentage");
+  const [items, setItems] = useState<CampaignItemDraft[]>([]);
 
   // ── Step validation ───────────────────────────────────────────────
   const stepErrors = useMemo(() => {
@@ -119,18 +114,18 @@ export default function NewCampaignWizard() {
     }
 
     const validItems = items.filter((i) => i.part_number.trim());
-    if (validItems.length === 0) errs.items.push("Add at least one campaign item with a part number");
+    if (validItems.length === 0) errs.items.push("Upload a CSV or Excel file with at least one item");
     validItems.forEach((it, idx) => {
       if (!it.discount_value || Number(it.discount_value) <= 0) {
         errs.items.push(`Item ${idx + 1}: discount value must be greater than zero`);
       }
-      if (it.discount_type === "percentage" && Number(it.discount_value) > 100) {
+      if (discountType === "percentage" && Number(it.discount_value) > 100) {
         errs.items.push(`Item ${idx + 1}: percentage cannot exceed 100%`);
       }
     });
 
     return errs;
-  }, [name, campaignType, startDate, endDate, targetAudience, targetDealerGroup, financialStatus, minCreditLimit, minTargetPct, items]);
+  }, [name, campaignType, startDate, endDate, targetAudience, targetDealerGroup, financialStatus, minCreditLimit, minTargetPct, items, discountType]);
 
   const currentStepErrors = stepErrors[currentStep.id];
   const stepIsValid = (id: StepId) => stepErrors[id].length === 0;
@@ -190,7 +185,7 @@ export default function NewCampaignWizard() {
         items: validItems.map((i) => ({
           part_number: i.part_number.trim(),
           part_description: i.part_description.trim() || null,
-          discount_type: i.discount_type,
+          discount_type: discountType,
           discount_value: Number(i.discount_value),
           min_order_quantity: Number(i.min_order_quantity) || 1,
         })),
@@ -602,13 +597,70 @@ export default function NewCampaignWizard() {
           {/* STEP: ITEMS */}
           {currentStep.id === "items" && (
             <>
-              <ItemsCSVUpload
-                onItemsConfirmed={(newItems) => setItems(newItems)}
-                onCancel={undefined}
-              />
-              <p className="text-xs text-white/60 mt-4">
-                {validItemsCount} item{validItemsCount !== 1 ? "s" : ""} added
-              </p>
+              {/* Campaign-level discount type — applies to every item */}
+              <div>
+                <Label className={labelClass}>Discount Type for this Campaign *</Label>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  {[
+                    {
+                      value: "percentage" as const,
+                      label: "Percentage (%)",
+                      desc: "Each item is discounted by a percentage of its price",
+                      icon: "%",
+                    },
+                    {
+                      value: "fixed" as const,
+                      label: "Fixed Price (EGP)",
+                      desc: "Each item is discounted by a fixed amount in EGP",
+                      icon: "EGP",
+                    },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setDiscountType(opt.value)}
+                      className={`rounded-lg border p-4 text-left transition ${
+                        discountType === opt.value
+                          ? "border-[#00BFA6] bg-[#00BFA6]/10"
+                          : "border-[#2A2A2A] bg-[#0D0D0D] hover:border-[#3A3A3A]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`flex h-7 w-7 items-center justify-center rounded text-xs font-bold ${
+                            discountType === opt.value
+                              ? "bg-[#00BFA6] text-black"
+                              : "bg-[#1A1A1A] text-white/40"
+                          }`}
+                        >
+                          {opt.icon}
+                        </span>
+                        <p
+                          className={`text-sm font-semibold ${
+                            discountType === opt.value ? "text-[#00BFA6]" : "text-white"
+                          }`}
+                        >
+                          {opt.label}
+                        </p>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-white/40">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-white/40">
+                  All items in this campaign will use this discount type. To mix types, create separate campaigns.
+                </p>
+              </div>
+
+              <div className="border-t border-[#2A2A2A] pt-5">
+                <ItemsCSVUpload
+                  discountType={discountType}
+                  onItemsConfirmed={(newItems) => setItems(newItems)}
+                  onCancel={undefined}
+                />
+                <p className="text-xs text-white/60 mt-4">
+                  {validItemsCount} item{validItemsCount !== 1 ? "s" : ""} added
+                </p>
+              </div>
             </>
           )}
 
@@ -704,11 +756,22 @@ export default function NewCampaignWizard() {
                   }
                 />
                 <ReviewRow
+                  label="Discount Type"
+                  value={
+                    <span className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-[#00BFA6] text-[10px] font-bold text-black">
+                        {discountType === "percentage" ? "%" : "EGP"}
+                      </span>
+                      <span>{discountType === "percentage" ? "Percentage (%)" : "Fixed Price (EGP)"}</span>
+                    </span>
+                  }
+                />
+                <ReviewRow
                   label="Items"
                   value={
                     <span>
                       <span className="font-bold text-white">{validItemsCount}</span>
-                      <span className="text-white/40"> part{validItemsCount !== 1 ? "s" : ""} configured</span>
+                      <span className="text-white/40"> part{validItemsCount !== 1 ? "s" : ""} configured · all using {discountType === "percentage" ? "% discount" : "fixed EGP discount"}</span>
                     </span>
                   }
                 />
