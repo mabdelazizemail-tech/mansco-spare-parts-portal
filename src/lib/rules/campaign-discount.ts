@@ -248,10 +248,17 @@ export async function getCampaignDiscounts(
   // checkCampaignDiscount below.
   const { supabaseAdmin } = await import("@/lib/supabase/admin");
 
-  const { data, error } = await supabaseAdmin
-    .from("campaign_items")
-    .select(
-      `
+  // Cap each `.in()` query to keep URL length and planner cost bounded.
+  const CHUNK_SIZE = 500;
+  const now = new Date();
+  type RawRow = CampaignItemRow & { part_number: string };
+
+  for (let i = 0; i < partNumbers.length; i += CHUNK_SIZE) {
+    const chunk = partNumbers.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await supabaseAdmin
+      .from("campaign_items")
+      .select(
+        `
       part_number,
       campaign_id,
       discount_type,
@@ -264,22 +271,24 @@ export async function getCampaignDiscounts(
         target_dealer_ids
       )
       `,
-    )
-    .in("part_number", partNumbers);
+      )
+      .in("part_number", chunk);
 
-  if (error) {
-    console.error("getCampaignDiscounts query failed:", error.message);
-    return result;
+    if (error) {
+      console.error("getCampaignDiscounts query failed:", error.message);
+      // Skip this chunk; return whatever we've accumulated so the price path
+      // never breaks. Subsequent chunks may still succeed.
+      continue;
+    }
+
+    for (const raw of (data ?? []) as unknown as RawRow[]) {
+      const [eligible] = filterEligibleCampaignItems([raw], dealerId, now);
+      if (!eligible) continue;
+      const arr = result.get(raw.part_number);
+      if (arr) arr.push(eligible);
+      else result.set(raw.part_number, [eligible]);
+    }
   }
 
-  const now = new Date();
-  type RawRow = CampaignItemRow & { part_number: string };
-  for (const raw of (data ?? []) as unknown as RawRow[]) {
-    const [eligible] = filterEligibleCampaignItems([raw], dealerId, now);
-    if (!eligible) continue;
-    const arr = result.get(raw.part_number);
-    if (arr) arr.push(eligible);
-    else result.set(raw.part_number, [eligible]);
-  }
   return result;
 }

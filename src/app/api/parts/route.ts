@@ -8,31 +8,8 @@ import {
   type StockSnapshot,
   type PriceSnapshot,
 } from "@/lib/rules/parts-availability";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCampaignDiscounts } from "@/lib/rules/campaign-discount";
-
-/**
- * Best-effort dealer lookup. Returns null for admins or unauthenticated callers.
- * The catalog must still render for them — they just won't see dealer-specific
- * discounts.
- */
-async function resolveOptionalDealerId(): Promise<string | null> {
-  try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const role = user.user_metadata?.role;
-    if (role !== "dealer" && role !== "sub_dealer") return null;
-    const { data: dealer } = await supabase
-      .from("dealers")
-      .select("id")
-      .eq("supabase_uid", user.id)
-      .maybeSingle();
-    return dealer?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+import { resolveOptionalDealerId } from "@/lib/auth-guards";
 
 /**
  * GET /api/parts
