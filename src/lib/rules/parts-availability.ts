@@ -207,6 +207,7 @@ export type PartSearchResult = {
   currency: string | null;
   // ── Discount fields (null when no displayable price or no eligible campaign) ──
   campaign_id: string | null;
+  /** 0 when no discount applies. Use `original_unit_price !== null` as the canonical "has discount" discriminant. */
   discount_pct: number;
   original_unit_price: number | null;
   discounted_unit_price: number | null;

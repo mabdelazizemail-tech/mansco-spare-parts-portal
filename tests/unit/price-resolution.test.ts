@@ -156,5 +156,7 @@ describe("buildPartSearchResult — discount fields", () => {
     expect(r.unit_price).toBeNull();
     expect(r.discounted_unit_price).toBeNull();
     expect(r.campaign_id).toBeNull();
+    expect(r.discount_pct).toBe(0);
+    expect(r.original_unit_price).toBeNull();
   });
 });
