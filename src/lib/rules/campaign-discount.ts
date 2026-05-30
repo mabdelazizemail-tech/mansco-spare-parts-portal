@@ -1,0 +1,228 @@
+import type { Decimal } from "@prisma/client/runtime/library";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New shared resolver — see docs/superpowers/specs/2026-05-29-campaign-discount-display-design.md
+//
+// `applyDiscount`, `filterEligibleCampaignItems`, `pickWinningRule` are pure
+// helpers, shared by the display path (parts lookups + cart) and the charge
+// path (POST /api/orders) so what the dealer sees == what submission charges.
+// `getCampaignDiscounts` is the batched DB query (correct snake_case schema).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DiscountType = "percentage" | "fixed";
+
+export interface CampaignRule {
+  campaignId: string;
+  discountType: DiscountType;
+  discountValue: number;
+}
+
+export interface CampaignItemRow {
+  campaign_id: string;
+  discount_type: DiscountType;
+  discount_value: number;
+  campaign: {
+    status: string;
+    start_date: string | null;
+    end_date: string | null;
+    target_audience: string;
+    target_dealer_ids: string[] | null;
+  };
+}
+
+export interface AppliedDiscount {
+  discountedUnitPrice: number;
+  discountPct: number;
+  lineDiscountPerUnit: number;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Apply a campaign rule to a unit price. Returns null when the rule yields
+ * no actual discount (zero/negative value, discounted price >= original).
+ */
+export function applyDiscount(
+  unitPrice: number,
+  rule: CampaignRule | null | undefined,
+): AppliedDiscount | null {
+  if (!rule || unitPrice <= 0) return null;
+  if (rule.discountValue <= 0) return null;
+  let discounted: number;
+  if (rule.discountType === "percentage") {
+    discounted = unitPrice * (1 - rule.discountValue / 100);
+  } else {
+    discounted = Math.max(0, unitPrice - rule.discountValue);
+  }
+  discounted = round2(discounted);
+  if (discounted >= unitPrice) return null;
+  const lineDiscountPerUnit = round2(unitPrice - discounted);
+  const discountPct = round2((lineDiscountPerUnit / unitPrice) * 100);
+  return { discountedUnitPrice: discounted, discountPct, lineDiscountPerUnit };
+}
+
+/**
+ * Keep only campaign_item rows whose joined campaign is currently active and
+ * targets this dealer. Quantity is intentionally NOT checked
+ * (min_order_quantity is ignored per design decision D2).
+ */
+export function filterEligibleCampaignItems(
+  rows: CampaignItemRow[],
+  dealerId: string,
+  now: Date = new Date(),
+): CampaignItemRow[] {
+  return rows.filter((r) => {
+    const c = r.campaign;
+    if (!c) return false;
+    if (c.status !== "active") return false;
+    if (c.start_date && new Date(c.start_date) > now) return false;
+    if (c.end_date && new Date(c.end_date) < now) return false;
+    const ids = c.target_dealer_ids ?? [];
+    return c.target_audience === "all" || ids.includes(dealerId);
+  });
+}
+
+/**
+ * From a list of candidate rules for ONE part, pick the rule yielding the
+ * lowest discounted unit price. Returns null if no candidate discounts.
+ */
+export function pickWinningRule(
+  candidates: CampaignItemRow[] | null | undefined,
+  unitPrice: number,
+): CampaignRule | null {
+  if (!candidates || candidates.length === 0 || unitPrice <= 0) return null;
+  let best: CampaignRule | null = null;
+  let bestDiscounted = unitPrice;
+  for (const row of candidates) {
+    const rule: CampaignRule = {
+      campaignId: row.campaign_id,
+      discountType: row.discount_type,
+      discountValue: Number(row.discount_value),
+    };
+    const applied = applyDiscount(unitPrice, rule);
+    if (applied && applied.discountedUnitPrice < bestDiscounted) {
+      bestDiscounted = applied.discountedUnitPrice;
+      best = rule;
+    }
+  }
+  return best;
+}
+
+export interface DiscountEligibility {
+  eligible: boolean;
+  campaignId?: string;
+  discountPct: number;
+  reason?: string;
+}
+
+/**
+ * Check if a dealer is eligible for campaign discounts on a specific part.
+ *
+ * Eligibility criteria:
+ * 1. Campaign must be active (status = 'active' and within date range)
+ * 2. Part must be in campaign items
+ * 3. Dealer must be in targetDealerIds or targetAudience = 'all'
+ * 4. Order quantity must meet minOrderQuantity
+ */
+export async function checkCampaignDiscount(
+  dealerId: string,
+  partNumber: string,
+  quantity: number
+): Promise<DiscountEligibility> {
+  try {
+    // Lazy import: only load Supabase client when this legacy function is called
+    const { supabaseAdmin } = await import("@/lib/supabase/admin");
+    const now = new Date();
+
+    // Get active campaigns that include this part and this dealer
+    const { data: campaignItems, error: campaignError } = await supabaseAdmin
+      .from("campaign_items")
+      .select(
+        `
+        id,
+        campaignId,
+        discountValue,
+        discountType,
+        minOrderQuantity,
+        campaign:campaigns (
+          id,
+          status,
+          targetAudience,
+          targetDealerIds,
+          startDate,
+          endDate
+        )
+        `
+      )
+      .eq("partNumber", partNumber);
+
+    if (campaignError) {
+      console.error("Campaign lookup error:", campaignError);
+      return { eligible: false, discountPct: 0 };
+    }
+
+    // Filter for active, eligible campaigns
+    for (const item of campaignItems || []) {
+      const campaign = (item as any).campaign;
+
+      // Check campaign is active
+      if (campaign.status !== "active") continue;
+      if (campaign.startDate && new Date(campaign.startDate) > now) continue;
+      if (campaign.endDate && new Date(campaign.endDate) < now) continue;
+
+      // Check dealer eligibility
+      const targetDealerIds = campaign.targetDealerIds || [];
+      const isEligibleDealer =
+        campaign.targetAudience === "all" || targetDealerIds.includes(dealerId);
+
+      if (!isEligibleDealer) continue;
+
+      // Check minimum order quantity
+      if (quantity < (item as any).minOrderQuantity) continue;
+
+      // Campaign matched! Calculate discount
+      const discountValue = Number((item as any).discountValue);
+      const discountType = (item as any).discountType; // "percentage" or "fixed"
+
+      // For now, assume percentage-based discounts
+      // discountValue is stored as percentage (e.g., 10 for 10%)
+      const discountPct =
+        discountType === "percentage" ? discountValue : 0;
+
+      return {
+        eligible: true,
+        campaignId: campaign.id,
+        discountPct,
+        reason: `Eligible for campaign discount on ${partNumber}`,
+      };
+    }
+
+    // No matching campaign found
+    return { eligible: false, discountPct: 0 };
+  } catch (err) {
+    console.error("Campaign discount check failed:", err);
+    return { eligible: false, discountPct: 0 };
+  }
+}
+
+/**
+ * Calculate discounted price for an order line
+ */
+export function calculateLineDiscount(
+  unitPrice: number,
+  quantity: number,
+  discountPct: number
+) {
+  const originalLineTotal = unitPrice * quantity;
+  const discountedUnitPrice = unitPrice * (1 - discountPct / 100);
+  const discountedLineTotal = discountedUnitPrice * quantity;
+  const totalDiscount = originalLineTotal - discountedLineTotal;
+
+  return {
+    discountPct,
+    discountedUnitPrice: Math.round(discountedUnitPrice * 100) / 100,
+    totalDiscount: Math.round(totalDiscount * 100) / 100,
+    originalLineTotal: Math.round(originalLineTotal * 100) / 100,
+    lineTotal: Math.round(discountedLineTotal * 100) / 100,
+  };
+}
