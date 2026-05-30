@@ -18,6 +18,7 @@ export interface CampaignRule {
 export interface CampaignItemRow {
   campaign_id: string;
   discount_type: DiscountType;
+  /** PostgREST returns NUMERIC as string at runtime — always read via pickWinningRule, which Number()-coerces. */
   discount_value: number;
   campaign: {
     status: string;
@@ -274,11 +275,11 @@ export async function getCampaignDiscounts(
   const now = new Date();
   type RawRow = CampaignItemRow & { part_number: string };
   for (const raw of (data ?? []) as unknown as RawRow[]) {
-    const eligible = filterEligibleCampaignItems([raw], dealerId, now);
-    if (eligible.length === 0) continue;
+    const [eligible] = filterEligibleCampaignItems([raw], dealerId, now);
+    if (!eligible) continue;
     const arr = result.get(raw.part_number);
-    if (arr) arr.push(raw);
-    else result.set(raw.part_number, [raw]);
+    if (arr) arr.push(eligible);
+    else result.set(raw.part_number, [eligible]);
   }
   return result;
 }
