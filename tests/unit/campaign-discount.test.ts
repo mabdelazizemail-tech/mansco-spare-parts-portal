@@ -49,6 +49,15 @@ describe("applyDiscount", () => {
     const negative: CampaignRule = { campaignId: "c1", discountType: "fixed", discountValue: -10 };
     expect(applyDiscount(100, negative)).toBeNull();
   });
+
+  it("percentage on a non-round price — rounds to 2 dp (known non-summing tolerance)", () => {
+    const rule: CampaignRule = { campaignId: "c1", discountType: "percentage", discountValue: 10 };
+    const r = applyDiscount(1234.567, rule)!;
+    expect(r.discountedUnitPrice).toBe(1111.11); // round2(1111.1103)
+    expect(r.discountPct).toBe(10);
+    // Note: discountedUnitPrice + lineDiscountPerUnit may differ from unitPrice
+    // by sub-cent rounding (1111.11 + 123.46 = 1234.57 ≠ 1234.567). Acceptable.
+  });
 });
 
 const camp = (over: Partial<CampaignItemRow["campaign"]> = {}): CampaignItemRow["campaign"] => ({
@@ -101,7 +110,6 @@ describe("filterEligibleCampaignItems", () => {
 
   it("drops rows without a joined campaign object", () => {
     const r = { ...row() };
-    // @ts-expect-error — modeling defensive nullability
     r.campaign = null;
     expect(filterEligibleCampaignItems([r], "dealer-A", NOW)).toHaveLength(0);
   });
@@ -140,5 +148,12 @@ describe("pickWinningRule", () => {
   it("ignores candidates that yield no actual discount", () => {
     const zero = row({ campaign_id: "zero", discount_value: 0 });
     expect(pickWinningRule([zero], 100)).toBeNull();
+  });
+
+  it("tie: first candidate wins when both yield identical discounted price", () => {
+    const a = row({ campaign_id: "a", discount_type: "fixed", discount_value: 10 });
+    const b = row({ campaign_id: "b", discount_type: "fixed", discount_value: 10 });
+    expect(pickWinningRule([a, b], 100)?.campaignId).toBe("a");
+    expect(pickWinningRule([b, a], 100)?.campaignId).toBe("b");
   });
 });

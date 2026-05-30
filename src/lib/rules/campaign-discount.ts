@@ -1,5 +1,3 @@
-import type { Decimal } from "@prisma/client/runtime/library";
-
 // ─────────────────────────────────────────────────────────────────────────────
 // New shared resolver — see docs/superpowers/specs/2026-05-29-campaign-discount-display-design.md
 //
@@ -27,7 +25,7 @@ export interface CampaignItemRow {
     end_date: string | null;
     target_audience: string;
     target_dealer_ids: string[] | null;
-  };
+  } | null;
 }
 
 export interface AppliedDiscount {
@@ -85,6 +83,9 @@ export function filterEligibleCampaignItems(
 /**
  * From a list of candidate rules for ONE part, pick the rule yielding the
  * lowest discounted unit price. Returns null if no candidate discounts.
+ *
+ * Tie-breaking: first-seen-wins. Stability depends on the caller preserving
+ * the array order (PostgREST returns rows in insertion order unless sorted).
  */
 export function pickWinningRule(
   candidates: CampaignItemRow[] | null | undefined,
@@ -116,13 +117,9 @@ export interface DiscountEligibility {
 }
 
 /**
- * Check if a dealer is eligible for campaign discounts on a specific part.
- *
- * Eligibility criteria:
- * 1. Campaign must be active (status = 'active' and within date range)
- * 2. Part must be in campaign items
- * 3. Dealer must be in targetDealerIds or targetAudience = 'all'
- * 4. Order quantity must meet minOrderQuantity
+ * @deprecated Broken (queries camelCase columns against snake_case schema; always
+ * returns no discount). Scheduled for deletion in Task 11. New code MUST use
+ * `getCampaignDiscounts` + `pickWinningRule` + `applyDiscount` instead.
  */
 export async function checkCampaignDiscount(
   dealerId: string,
