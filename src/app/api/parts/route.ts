@@ -3,10 +3,36 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { categories } from "@/lib/catalog";
 import {
   buildPartSearchResult,
+  buildPriceMap,
   type PartSearchResult,
   type StockSnapshot,
   type PriceSnapshot,
 } from "@/lib/rules/parts-availability";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getCampaignDiscounts } from "@/lib/rules/campaign-discount";
+
+/**
+ * Best-effort dealer lookup. Returns null for admins or unauthenticated callers.
+ * The catalog must still render for them — they just won't see dealer-specific
+ * discounts.
+ */
+async function resolveOptionalDealerId(): Promise<string | null> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const role = user.user_metadata?.role;
+    if (role !== "dealer" && role !== "sub_dealer") return null;
+    const { data: dealer } = await supabase
+      .from("dealers")
+      .select("id")
+      .eq("supabase_uid", user.id)
+      .maybeSingle();
+    return dealer?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /api/parts
@@ -87,11 +113,18 @@ export async function GET(req: NextRequest) {
         .from("price_list_items")
         .select("part_number, unit_price, currency, price_list_id");
       if (priceRows) {
-        priceMap = new Map(priceRows.map((p) => [p.part_number, p as PriceSnapshot]));
+        // A part may now carry multiple tags (e.g. STANDARD + ADMIN_MANUAL);
+        // resolve each to one winning price deterministically.
+        priceMap = buildPriceMap(priceRows as PriceSnapshot[]);
       }
     } catch {
       // price table not seeded yet
     }
+
+    // 3b. Discount candidates — best-effort (no dealer = no discounts)
+    const dealerId = await resolveOptionalDealerId();
+    const partNumbers = catalogRows.map((c) => c.partNumber);
+    const discountMap = await getCampaignDiscounts(dealerId, partNumbers);
 
     // 4. Build search results applying the no-price rule
     let results: PartSearchResult[] = catalogRows.map((part) =>
@@ -99,6 +132,7 @@ export async function GET(req: NextRequest) {
         catalog: part,
         stock: stockMap.get(part.partNumber) ?? null,
         price: priceMap.get(part.partNumber) ?? null,
+        discountCandidates: discountMap.get(part.partNumber) ?? null,
       })
     );
 
