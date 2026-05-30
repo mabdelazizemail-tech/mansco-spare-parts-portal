@@ -110,121 +110,6 @@ export function pickWinningRule(
   return best;
 }
 
-export interface DiscountEligibility {
-  eligible: boolean;
-  campaignId?: string;
-  discountPct: number;
-  reason?: string;
-}
-
-/**
- * @deprecated Broken (queries camelCase columns against snake_case schema; always
- * returns no discount). Scheduled for deletion in Task 11. New code MUST use
- * `getCampaignDiscounts` + `pickWinningRule` + `applyDiscount` instead.
- */
-export async function checkCampaignDiscount(
-  dealerId: string,
-  partNumber: string,
-  quantity: number
-): Promise<DiscountEligibility> {
-  try {
-    // Lazy import: only load Supabase client when this legacy function is called
-    const { supabaseAdmin } = await import("@/lib/supabase/admin");
-    const now = new Date();
-
-    // Get active campaigns that include this part and this dealer
-    const { data: campaignItems, error: campaignError } = await supabaseAdmin
-      .from("campaign_items")
-      .select(
-        `
-        id,
-        campaignId,
-        discountValue,
-        discountType,
-        minOrderQuantity,
-        campaign:campaigns (
-          id,
-          status,
-          targetAudience,
-          targetDealerIds,
-          startDate,
-          endDate
-        )
-        `
-      )
-      .eq("partNumber", partNumber);
-
-    if (campaignError) {
-      console.error("Campaign lookup error:", campaignError);
-      return { eligible: false, discountPct: 0 };
-    }
-
-    // Filter for active, eligible campaigns
-    for (const item of campaignItems || []) {
-      const campaign = (item as any).campaign;
-
-      // Check campaign is active
-      if (campaign.status !== "active") continue;
-      if (campaign.startDate && new Date(campaign.startDate) > now) continue;
-      if (campaign.endDate && new Date(campaign.endDate) < now) continue;
-
-      // Check dealer eligibility
-      const targetDealerIds = campaign.targetDealerIds || [];
-      const isEligibleDealer =
-        campaign.targetAudience === "all" || targetDealerIds.includes(dealerId);
-
-      if (!isEligibleDealer) continue;
-
-      // Check minimum order quantity
-      if (quantity < (item as any).minOrderQuantity) continue;
-
-      // Campaign matched! Calculate discount
-      const discountValue = Number((item as any).discountValue);
-      const discountType = (item as any).discountType; // "percentage" or "fixed"
-
-      // For now, assume percentage-based discounts
-      // discountValue is stored as percentage (e.g., 10 for 10%)
-      const discountPct =
-        discountType === "percentage" ? discountValue : 0;
-
-      return {
-        eligible: true,
-        campaignId: campaign.id,
-        discountPct,
-        reason: `Eligible for campaign discount on ${partNumber}`,
-      };
-    }
-
-    // No matching campaign found
-    return { eligible: false, discountPct: 0 };
-  } catch (err) {
-    console.error("Campaign discount check failed:", err);
-    return { eligible: false, discountPct: 0 };
-  }
-}
-
-/**
- * Calculate discounted price for an order line
- */
-export function calculateLineDiscount(
-  unitPrice: number,
-  quantity: number,
-  discountPct: number
-) {
-  const originalLineTotal = unitPrice * quantity;
-  const discountedUnitPrice = unitPrice * (1 - discountPct / 100);
-  const discountedLineTotal = discountedUnitPrice * quantity;
-  const totalDiscount = originalLineTotal - discountedLineTotal;
-
-  return {
-    discountPct,
-    discountedUnitPrice: Math.round(discountedUnitPrice * 100) / 100,
-    totalDiscount: Math.round(totalDiscount * 100) / 100,
-    originalLineTotal: Math.round(originalLineTotal * 100) / 100,
-    lineTotal: Math.round(discountedLineTotal * 100) / 100,
-  };
-}
-
 /**
  * Batched campaign-discount lookup. ONE query for all part numbers.
  *
@@ -244,8 +129,7 @@ export async function getCampaignDiscounts(
   if (!dealerId || partNumbers.length === 0) return result;
 
   // Lazy import to avoid module-load failure in tests where Supabase env
-  // vars are not present. Mirrors the pattern used by the deprecated
-  // checkCampaignDiscount below.
+  // vars are not present.
   const { supabaseAdmin } = await import("@/lib/supabase/admin");
 
   // Cap each `.in()` query to keep URL length and planner cost bounded.
