@@ -17,8 +17,10 @@ A dealer placing an order sees **full list price** with no indication of any cam
 
 The query error is swallowed by the function's `catch`, which returns `{ eligible: false, discountPct: 0 }`. **Result: no discount is ever applied — not in any UI, and not even at order submission. Every order is charged full price.** This is the same camelCase/snake_case schism as the earlier `price_lists` bug: Supabase-client code written in Prisma-style camelCase against snake_case SQL tables.
 
-### Defect B — order detail totals misread the stored subtotal
-`src/app/api/orders/route.ts` stores `orders.subtotal` as the **original (pre-discount)** subtotal, with the discounted value in `subtotal_after_discount`. The order detail page (`src/app/dashboard/orders/[id]/page.tsx`) instead treats `order.subtotal` as the *after-discount* value: it computes `originalSubtotal = order.subtotal + orderDiscount` (double-counts the discount) and labels `order.subtotal` as "Subtotal After Discount", ignoring the `subtotal_after_discount` column. Today this is masked because Defect A forces `total_discount = 0`; it surfaces the moment discounts actually compute.
+### Defect B — RETRACTED on closer reading: detail totals are correct
+Initial analysis suspected the order detail page double-counted the discount. Re-reading the actual `orders` INSERT in `src/app/api/orders/route.ts` shows otherwise: `orders.subtotal` is stored **post-discount** (the loop accumulates discounted line totals), `vat_amount` = 14% of that, `total_amount` = subtotal + VAT, and each `order_lines.total_discount` is persisted. The detail page (`[id]/page.tsx`) sums the line discounts and derives the original as `order.subtotal + Σ line.total_discount` — which is **correct**. No detail-page change is required; it renders nothing today only because Defect A forces every `total_discount` to 0.
+
+The lone real inconsistency is cosmetic: the POST `/api/orders` **response payload** labels its `subtotal` field as the pre-discount value while the DB column stores the post-discount value. No UI consumes it for totals — optional cleanup only.
 
 ### Defect C — display path doesn't carry discount at all
 Even with A & B fixed, the parts-lookup APIs, the cart store/context, and the bulk-upload/review UI have no discount fields. The New Order review page references `cart.totalDiscount`, which does not exist on the cart context (`TS2339`, hidden by `ignoreBuildErrors`) — at runtime it is `undefined`, rendering `EGP NaN` for "Original Subtotal" and suppressing the discount row.
@@ -28,7 +30,7 @@ Even with A & B fixed, the parts-lookup APIs, the cart store/context, and the bu
 1. Campaign discounts are **correctly computed** (Defect A) for eligible dealer + part combinations.
 2. The dealer **sees** the discount everywhere they build/review an order: parts search, bulk-upload preview, cart, and order review/summary (Defect C).
 3. **What the dealer sees equals what submission charges** — guaranteed by a single shared resolver + math helper used by both the display and charge paths.
-4. The order detail page shows correct, internally-consistent totals (Defect B).
+4. The order detail page (already correct — Defect B retracted, see §1) renders discounts automatically once they compute; optionally tidy the POST response payload's `subtotal` label.
 
 ## 3. Non-Goals / Out of Scope
 
@@ -87,18 +89,17 @@ Affected: `src/app/api/parts/route.ts`, `parts/bulk-lookup/route.ts`, `parts/[pa
 ### 5.5 UI surfaces
 - **Bulk-upload preview** (`src/components/dealer/order-bulk-upload.tsx`): `EnrichedRow` carries discount from the lookup; render struck `original_unit_price` + `discounted_unit_price`, discounted line total, and a "Campaign −X%" tag; the "All N valid · Subtotal" banner reflects the discounted subtotal.
 - **New Order review / Order Summary** (`src/app/dashboard/orders/new/page.tsx`): existing `Original Subtotal` (struck) and `Campaign Discount` rows light up via `cart.totalDiscount`; per-line rows show discounted unit price.
-- **Order detail** (`src/app/dashboard/orders/[id]/page.tsx`): fix Defect B — read `subtotal_after_discount` directly; canonical semantics below.
+- **Order detail** (`src/app/dashboard/orders/[id]/page.tsx`): **no change needed** — it already derives original/after-discount correctly from the stored post-discount `orders.subtotal` + summed `order_lines.total_discount`, and lights up automatically once Defect A makes discounts non-zero.
 
 ### 5.6 Server submission — `src/app/api/orders/route.ts`
 - Replace the per-item `checkCampaignDiscount` loop with the shared `getCampaignDiscounts` + `applyDiscount` (correct schema, no qty gate, same rounding).
-- **Canonical order totals** (writer + reader must agree):
-  - `orders.subtotal` = original (pre-discount) subtotal
-  - `orders.total_discount` = Σ line discounts
-  - `orders.subtotal_after_discount` = subtotal − total_discount
-  - `orders.vat_amount` = 14% × subtotal_after_discount
-  - `orders.total_amount` = subtotal_after_discount + vat_amount
-- Order lines keep `discount_pct`, `discounted_unit_price`, `total_discount`, `original_line_total`, `line_total`, `campaign_id`.
-- Audit the actual `orders`/`order_lines` insert column names against these and make the detail page read them consistently.
+- **Preserve the current (correct) totals convention — do NOT change storage semantics:**
+  - `orders.subtotal` = **post-discount** subtotal (Σ discounted line totals)
+  - `orders.vat_amount` = 14% × `orders.subtotal`
+  - `orders.total_amount` = `orders.subtotal` + `vat_amount`
+  - `order_lines` persist `discount_pct`, `discounted_unit_price`, `total_discount`, `original_line_total`, `line_total`, `campaign_id` (the detail page sums these).
+- Only the resolver call changes (shared resolver + `applyDiscount`, correct schema, no qty gate). The stored numbers keep the same meaning, so the detail page stays correct.
+- (Optional) make the POST response payload's `subtotal` field match the stored post-discount value.
 
 ## 6. Data Flow
 
