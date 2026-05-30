@@ -250,10 +250,7 @@ export default function NewOrderPage() {
               <div className="flex justify-between text-white/60">
                 <span>Original Subtotal</span>
                 <span className="line-through">
-                  {formatEGP(
-                    (submitSuccess.subtotal || 0) +
-                      (submitSuccess.total_discount || 0)
-                  )}
+                  {formatEGP(submitSuccess.subtotal || 0)}
                 </span>
               </div>
               {submitSuccess.total_discount && submitSuccess.total_discount > 0 && (
@@ -424,7 +421,7 @@ export default function NewOrderPage() {
                   Original Subtotal
                 </td>
                 <td className="px-5 py-3 text-right text-white/70 line-through">
-                  {formatEGP(cart.subtotal + cart.totalDiscount)}
+                  {formatEGP(cart.subtotal)}
                 </td>
               </tr>
               {cart.totalDiscount > 0 && (
@@ -448,7 +445,7 @@ export default function NewOrderPage() {
                   Subtotal
                 </td>
                 <td className="px-5 py-3 text-right font-bold text-white">
-                  {formatEGP(cart.subtotal)}
+                  {formatEGP(cart.subtotalAfterDiscount)}
                 </td>
               </tr>
               <tr>
@@ -876,9 +873,21 @@ export default function NewOrderPage() {
                 </span>
               </div>
               <div className="border-t border-[#2A2A2A] pt-2" />
+              {cart.totalDiscount > 0 && (
+                <>
+                  <div className="flex justify-between text-white/40">
+                    <span>Original</span>
+                    <span className="text-white/40 line-through">{formatEGP(cart.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-400">
+                    <span>Campaign Discount</span>
+                    <span>-{formatEGP(cart.totalDiscount)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-white/40">
                 <span>Subtotal</span>
-                <span className="text-white">{formatEGP(cart.subtotal)}</span>
+                <span className="text-white">{formatEGP(cart.subtotalAfterDiscount)}</span>
               </div>
               <div className="flex justify-between text-white/40">
                 <span>VAT (14%)</span>
