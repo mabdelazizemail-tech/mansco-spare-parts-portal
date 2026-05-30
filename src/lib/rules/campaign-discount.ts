@@ -223,3 +223,62 @@ export function calculateLineDiscount(
     lineTotal: Math.round(discountedLineTotal * 100) / 100,
   };
 }
+
+/**
+ * Batched campaign-discount lookup. ONE query for all part numbers.
+ *
+ * Returns `Map<part_number, eligible CampaignItemRow[]>`. The caller picks
+ * the winning rule via `pickWinningRule(candidates, unitPrice)` once the
+ * part's actual unit price is known.
+ *
+ * Schema is snake_case per the live `campaign_items` / `campaigns` tables.
+ * Without a dealer (admin or unauthenticated context) the map is empty.
+ * A query failure logs and returns empty — never throws into the price path.
+ */
+export async function getCampaignDiscounts(
+  dealerId: string | null,
+  partNumbers: string[],
+): Promise<Map<string, CampaignItemRow[]>> {
+  const result = new Map<string, CampaignItemRow[]>();
+  if (!dealerId || partNumbers.length === 0) return result;
+
+  // Lazy import to avoid module-load failure in tests where Supabase env
+  // vars are not present. Mirrors the pattern used by the deprecated
+  // checkCampaignDiscount below.
+  const { supabaseAdmin } = await import("@/lib/supabase/admin");
+
+  const { data, error } = await supabaseAdmin
+    .from("campaign_items")
+    .select(
+      `
+      part_number,
+      campaign_id,
+      discount_type,
+      discount_value,
+      campaign:campaigns!inner (
+        status,
+        start_date,
+        end_date,
+        target_audience,
+        target_dealer_ids
+      )
+      `,
+    )
+    .in("part_number", partNumbers);
+
+  if (error) {
+    console.error("getCampaignDiscounts query failed:", error.message);
+    return result;
+  }
+
+  const now = new Date();
+  type RawRow = CampaignItemRow & { part_number: string };
+  for (const raw of (data ?? []) as unknown as RawRow[]) {
+    const eligible = filterEligibleCampaignItems([raw], dealerId, now);
+    if (eligible.length === 0) continue;
+    const arr = result.get(raw.part_number);
+    if (arr) arr.push(raw);
+    else result.set(raw.part_number, [raw]);
+  }
+  return result;
+}
