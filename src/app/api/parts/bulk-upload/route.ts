@@ -2,19 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { validatePartRow } from "@/lib/csv/parts-schemas";
+import { ADMIN_MANUAL_PRICE_LIST_ID } from "@/lib/rules/parts-availability";
 
 /**
  * POST /api/parts/bulk-upload
  *
  * Admin-only. Accepts a JSON body { items: PartUploadInput[] } and upserts
- * each row into parts_catalog. Price/currency is written to a designated
- * "Admin Bulk Upload" price list (created on demand).
+ * each row into the deployed denormalized schema:
+ *   - parts_catalog        (PK: part_number)
+ *   - price_list_items     (composite PK: part_number, price_list_id)
+ *
+ * Prices are written under the ADMIN_MANUAL price-list tag so they live in
+ * their own row and are never clobbered by a SAP `STANDARD` pricing sync.
+ * Display precedence between tags is resolved centrally in
+ * `@/lib/rules/parts-availability` (pickPrice / buildPriceMap).
+ *
+ * NOTE: There is intentionally NO `price_lists` parent table — that table does
+ * not exist in this database. The price list is just a text tag on each item.
  *
  * The endpoint re-validates each row server-side using the same Zod schema
  * the client uses — never trust client validation alone.
  */
-
-const ADMIN_PRICE_LIST_NAME = "Admin Bulk Upload";
 
 type PartUploadInput = {
   "Part Number": string;
@@ -74,41 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Find or create the "Admin Bulk Upload" price list
-    let priceListId: string;
-    const { data: existingList } = await supabaseAdmin
-      .from("price_lists")
-      .select("id")
-      .eq("name", ADMIN_PRICE_LIST_NAME)
-      .maybeSingle();
-
-    if (existingList) {
-      priceListId = existingList.id;
-    } else {
-      const { data: newList, error: listError } = await supabaseAdmin
-        .from("price_lists")
-        .insert({
-          name: ADMIN_PRICE_LIST_NAME,
-          effective_from: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-      if (listError || !newList) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "DB_ERROR",
-              message: `Failed to create price list: ${listError?.message ?? "unknown"}`,
-            },
-          },
-          { status: 500 },
-        );
-      }
-      priceListId = newList.id;
-    }
-
-    // 4. Validate + upsert each row
+    // 3. Validate + upsert each row
     const result: UploadResult = { inserted: 0, updated: 0, failed: 0, failures: [] };
 
     for (let i = 0; i < items.length; i++) {
@@ -129,94 +103,67 @@ export async function POST(req: NextRequest) {
       const model = raw["Model"] ? String(raw["Model"]).trim() : null;
       const price = Number(raw["Price"]);
       const currency = (raw["Currency"] ? String(raw["Currency"]).trim() : "EGP").toUpperCase();
+      const now = new Date().toISOString();
 
-      // Check if part already exists
+      // Pre-check existence (PK is part_number, not an id column) so we can
+      // report inserted vs updated counts.
       const { data: existing } = await supabaseAdmin
         .from("parts_catalog")
-        .select("id")
+        .select("part_number")
         .eq("part_number", partNumber)
         .maybeSingle();
+      const isUpdate = Boolean(existing);
 
-      let partId: string;
-
-      if (existing) {
-        // Update existing
-        const { error: updateError } = await supabaseAdmin
-          .from("parts_catalog")
-          .update({
-            name_en: nameEn,
-            name_ar: nameAr,
-            category_id: category,
-            model: model,
-            last_synced_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
-
-        if (updateError) {
-          result.failed++;
-          result.failures.push({
-            row: i + 1,
-            part_number: partNumberDisplay,
-            errors: [`DB update failed: ${updateError.message}`],
-          });
-          continue;
-        }
-        partId = existing.id;
-        result.updated++;
-      } else {
-        // Insert new
-        const { data: newPart, error: insertError } = await supabaseAdmin
-          .from("parts_catalog")
-          .insert({
+      // Upsert catalog row (mirrors src/lib/sync/parts-importer.ts).
+      const { error: catalogError } = await supabaseAdmin
+        .from("parts_catalog")
+        .upsert(
+          {
             part_number: partNumber,
             name_en: nameEn,
             name_ar: nameAr,
             category_id: category,
-            model: model,
-            last_synced_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
+            model,
+            last_synced_at: now,
+          },
+          { onConflict: "part_number" },
+        );
 
-        if (insertError || !newPart) {
-          result.failed++;
-          result.failures.push({
-            row: i + 1,
-            part_number: partNumberDisplay,
-            errors: [`DB insert failed: ${insertError?.message ?? "unknown"}`],
-          });
-          continue;
-        }
-        partId = newPart.id;
-        result.inserted++;
+      if (catalogError) {
+        result.failed++;
+        result.failures.push({
+          row: i + 1,
+          part_number: partNumberDisplay,
+          errors: [`Catalog write failed: ${catalogError.message}`],
+        });
+        continue;
       }
 
-      // Upsert price list item — one row per (priceListId, partId)
-      const { data: existingPli } = await supabaseAdmin
-        .from("price_list_items")
-        .select("id")
-        .eq("price_list_id", priceListId)
-        .eq("part_id", partId)
-        .maybeSingle();
+      if (isUpdate) result.updated++;
+      else result.inserted++;
 
-      if (existingPli) {
-        await supabaseAdmin
-          .from("price_list_items")
-          .update({
+      // Upsert the price under the ADMIN_MANUAL tag — composite PK keeps it
+      // separate from any SAP STANDARD row for the same part.
+      const { error: priceError } = await supabaseAdmin
+        .from("price_list_items")
+        .upsert(
+          {
             part_number: partNumber,
+            price_list_id: ADMIN_MANUAL_PRICE_LIST_ID,
             unit_price: price,
             currency,
-            last_synced_at: new Date().toISOString(),
-          })
-          .eq("id", existingPli.id);
-      } else {
-        await supabaseAdmin.from("price_list_items").insert({
-          price_list_id: priceListId,
-          part_id: partId,
-          part_number: partNumber,
-          unit_price: price,
-          currency,
-          last_synced_at: new Date().toISOString(),
+            last_synced_at: now,
+          },
+          { onConflict: "part_number,price_list_id" },
+        );
+
+      if (priceError) {
+        // Catalog persisted, but the price did not — surface it so the admin
+        // knows to retry, without losing the catalog write.
+        result.failures.push({
+          row: i + 1,
+          part_number: partNumberDisplay,
+          errors: [`Catalog saved, but price write failed: ${priceError.message}`],
         });
       }
     }

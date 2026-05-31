@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   Loader2,
   ShieldAlert,
+  Tag,
+  TrendingDown,
 } from "lucide-react";
 
 type ToneColor = "success" | "warning" | "destructive" | "info" | "muted" | "accent";
@@ -57,6 +59,11 @@ type OrderLine = {
   line_total: number;
   line_status: string;
   backorder_eta?: string | null;
+  campaign_id?: string | null;
+  discount_pct?: number;
+  discounted_unit_price?: number;
+  total_discount?: number;
+  original_line_total?: number;
 };
 
 type TimelineEvent = {
@@ -381,7 +388,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       <div className="flex items-center gap-3">
                         <PartThumbnail src={null} alt={line.part_name} size="sm" />
                         <div>
-                          <p className="font-medium text-white">{line.part_name}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-white">{line.part_name}</p>
+                            {line.campaign_id && line.discount_pct && line.discount_pct > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                                <Tag className="h-2.5 w-2.5" />
+                                Campaign
+                              </span>
+                            )}
+                          </div>
                           <p className="font-mono text-xs text-white/30">{line.part_number}</p>
                         </div>
                       </div>
@@ -429,24 +444,76 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <td className="px-5 py-3">
                       <StatusBadge tone={statusTone(line.line_status)} label={statusLabel(line.line_status)} />
                     </td>
-                    <td className="px-5 py-3 text-right text-white/70">{formatEGP(line.unit_price)}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-white">{formatEGP(line.line_total)}</td>
+                    <td className="px-5 py-3 text-right">
+                      {line.discount_pct && line.discount_pct > 0 ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-xs text-white/30 line-through">{formatEGP(line.unit_price)}</span>
+                          <span className="text-white font-medium">{formatEGP(line.discounted_unit_price ?? line.unit_price)}</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                            <Tag className="h-2.5 w-2.5" />
+                            -{Number(line.discount_pct)}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-white/70">{formatEGP(line.unit_price)}</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {line.discount_pct && line.discount_pct > 0 ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-xs text-white/30 line-through">{formatEGP(line.original_line_total ?? line.unit_price * line.quantity_requested)}</span>
+                          <span className="font-semibold text-white">{formatEGP(line.line_total)}</span>
+                          <span className="text-[10px] text-emerald-400">Save {formatEGP(line.total_discount ?? 0)}</span>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-white">{formatEGP(line.line_total)}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-[#2A2A2A]">
-                  <td colSpan={4} className="px-5 py-3 text-right text-sm text-white/50">Subtotal</td>
-                  <td className="px-5 py-3 text-right font-bold text-white">{formatEGP(order.subtotal)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={4} className="px-5 py-2 text-right text-sm text-white/50">VAT (14%)</td>
-                  <td className="px-5 py-2 text-right text-white/70">{formatEGP(order.vat_amount)}</td>
-                </tr>
-                <tr className="border-t border-[#2A2A2A]">
-                  <td colSpan={4} className="px-5 py-3 text-right text-sm font-semibold text-white">Total</td>
-                  <td className="px-5 py-3 text-right text-lg font-bold text-white">{formatEGP(order.total_amount)}</td>
-                </tr>
+                {(() => {
+                  const orderDiscount = order.order_lines.reduce(
+                    (sum, l) => sum + Number(l.total_discount ?? 0),
+                    0
+                  );
+                  const hasDiscount = orderDiscount > 0;
+                  const originalSubtotal = Number(order.subtotal) + orderDiscount;
+                  return (
+                    <>
+                      {hasDiscount && (
+                        <>
+                          <tr className="border-t border-[#2A2A2A]">
+                            <td colSpan={4} className="px-5 py-3 text-right text-sm text-white/50">Original Subtotal</td>
+                            <td className="px-5 py-3 text-right text-sm text-white/40 line-through">{formatEGP(originalSubtotal)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={4} className="px-5 py-2 text-right text-sm text-emerald-400 flex items-center justify-end gap-1.5">
+                              <TrendingDown className="h-3.5 w-3.5" />
+                              Campaign Discount
+                            </td>
+                            <td className="px-5 py-2 text-right text-sm font-semibold text-emerald-400">-{formatEGP(orderDiscount)}</td>
+                          </tr>
+                        </>
+                      )}
+                      <tr className={hasDiscount ? "" : "border-t border-[#2A2A2A]"}>
+                        <td colSpan={4} className="px-5 py-3 text-right text-sm text-white/50">
+                          {hasDiscount ? "Subtotal After Discount" : "Subtotal"}
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold text-white">{formatEGP(order.subtotal)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={4} className="px-5 py-2 text-right text-sm text-white/50">VAT (14%)</td>
+                        <td className="px-5 py-2 text-right text-white/70">{formatEGP(order.vat_amount)}</td>
+                      </tr>
+                      <tr className="border-t border-[#2A2A2A]">
+                        <td colSpan={4} className="px-5 py-3 text-right text-sm font-semibold text-white">Total</td>
+                        <td className="px-5 py-3 text-right text-lg font-bold text-white">{formatEGP(order.total_amount)}</td>
+                      </tr>
+                    </>
+                  );
+                })()}
               </tfoot>
             </table>
           </div>

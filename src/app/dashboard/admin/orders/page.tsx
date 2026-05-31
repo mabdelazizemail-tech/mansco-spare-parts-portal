@@ -10,6 +10,7 @@ import {
   Filter,
   ChevronRight,
   Trash2,
+  Tag,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import {
@@ -41,7 +42,20 @@ type OrderRow = {
   invoice_number: string | null;
   financial_block: boolean;
   eta_calculated: string | null;
+  order_lines?: {
+    id: string;
+    campaign_id?: string | null;
+    discount_pct?: number;
+    total_discount?: number;
+  }[];
 };
+
+function getOrderDiscount(order: OrderRow): number {
+  return (order.order_lines ?? []).reduce(
+    (sum, l) => sum + Number(l.total_discount ?? 0),
+    0
+  );
+}
 
 // Status → badge color mapping (dark-theme aware).
 const statusStyles: Record<string, string> = {
@@ -387,18 +401,32 @@ export default function AdminOrdersHistoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => (
+                  {orders.map((order) => {
+                    const orderDiscount = getOrderDiscount(order);
+                    const hasDiscount = orderDiscount > 0;
+                    return (
                     <TableRow
                       key={order.id}
                       className="border-[#2A2A2A] transition hover:bg-white/[0.02]"
                     >
                       <TableCell>
-                        <Link
-                          href={`/dashboard/orders/${order.id}`}
-                          className="font-mono text-xs font-semibold text-[#00BFA6] hover:underline"
-                        >
-                          {order.order_number}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/dashboard/orders/${order.id}`}
+                            className="font-mono text-xs font-semibold text-[#00BFA6] hover:underline"
+                          >
+                            {order.order_number}
+                          </Link>
+                          {hasDiscount && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400"
+                              title={`Campaign discount: ${formatCurrency(orderDiscount)}`}
+                            >
+                              <Tag className="h-2.5 w-2.5" />
+                              Campaign
+                            </span>
+                          )}
+                        </div>
                         {order.financial_block && (
                           <div className="mt-1 inline-flex items-center gap-1 rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] uppercase font-bold text-red-400">
                             Financial block
@@ -439,7 +467,14 @@ export default function AdminOrdersHistoryPage() {
                         {order.invoice_number ?? "—"}
                       </TableCell>
                       <TableCell className="text-end font-mono font-semibold text-white">
-                        {formatCurrency(order.total_amount)}
+                        <div className="flex flex-col items-end">
+                          <span>{formatCurrency(order.total_amount)}</span>
+                          {hasDiscount && (
+                            <span className="text-[10px] font-normal text-emerald-400">
+                              -{formatCurrency(orderDiscount)}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-end">
                         <div className="flex items-center justify-end gap-1">
@@ -484,7 +519,8 @@ export default function AdminOrdersHistoryPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

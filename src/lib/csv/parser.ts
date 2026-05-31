@@ -6,11 +6,11 @@ export interface ParseResult {
   errors: string[];
 }
 
+// Required columns for order bulk upload (dealer-facing)
+// Note: Description, Discount Value, Min Order Quantity are retrieved from catalog, not from CSV
 const REQUIRED_COLUMNS = [
   "Part Number",
-  "Description",
-  "Discount Value",
-  "Min Order Quantity",
+  "Quantity",
 ];
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
