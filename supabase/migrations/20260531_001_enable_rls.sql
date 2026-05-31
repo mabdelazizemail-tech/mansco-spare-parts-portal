@@ -32,7 +32,6 @@ alter table public.dealers                enable row level security;
 alter table public.dealer_permissions     enable row level security;
 alter table public.parts_catalog          enable row level security;
 alter table public.stock_availability     enable row level security;
-alter table public.price_lists            enable row level security;
 alter table public.price_list_items       enable row level security;
 alter table public.orders                 enable row level security;
 alter table public.order_lines            enable row level security;
