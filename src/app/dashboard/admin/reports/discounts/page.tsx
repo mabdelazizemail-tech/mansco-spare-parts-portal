@@ -380,8 +380,8 @@ export default function DiscountAnalyticsDashboard() {
                         fontSize: 12,
                       }}
                       labelStyle={{ color: "#fff" }}
-                      formatter={(value: number, name: string) =>
-                        name === "discount_given" ? [formatEGP(value), "Discount"] : [value, name]
+                      formatter={((value: number, name: string) =>
+                        name === "discount_given" ? [formatEGP(value), "Discount"] : [value, name]) as never
                       }
                     />
                     <Line
@@ -435,8 +435,8 @@ export default function DiscountAnalyticsDashboard() {
                         borderRadius: 8,
                         fontSize: 12,
                       }}
-                      formatter={(value: number, name: string) =>
-                        name === "discount" ? [formatEGP(value), "Discount"] : [value, "Orders"]
+                      formatter={((value: number, name: string) =>
+                        name === "discount" ? [formatEGP(value), "Discount"] : [value, "Orders"]) as never
                       }
                     />
                     <Bar dataKey="discount" fill="#10B981" radius={[0, 4, 4, 0]} />
