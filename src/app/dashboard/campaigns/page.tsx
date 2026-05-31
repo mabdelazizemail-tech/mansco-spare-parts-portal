@@ -1,30 +1,19 @@
 "use client";
 
-import { campaigns } from "@/lib/portal-data";
+import { useEffect, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/portal/status-badge";
-import { Button } from "@/components/ui/button";
-import {
-  CalendarDays,
-  Tag,
-  ArrowRight,
-} from "lucide-react";
+import { CalendarDays, Tag } from "lucide-react";
 
-// Group campaigns by active vs expiring soon
-const now = new Date();
-const oneWeek = 7 * 24 * 60 * 60 * 1000;
-
-const activeCampaigns = campaigns.filter(
-  (c) => new Date(c.endDate).getTime() - now.getTime() > oneWeek
-);
-const expiringSoon = campaigns.filter(
-  (c) => {
-    const diff = new Date(c.endDate).getTime() - now.getTime();
-    return diff > 0 && diff <= oneWeek;
-  }
-);
-const expired = campaigns.filter(
-  (c) => new Date(c.endDate).getTime() <= now.getTime()
-);
+type ActiveCampaign = {
+  id: string;
+  name: string;
+  description: string;
+  campaignType: string;
+  startDate: string;
+  endDate: string;
+  discountLabel: string | null;
+  itemCount: number;
+};
 
 const gradients = [
   "from-[#00BFA6]/20 to-[#00BFA6]/5",
@@ -33,11 +22,14 @@ const gradients = [
   "from-orange-500/20 to-orange-500/5",
 ];
 
-function CampaignCard({ campaign, idx }: { campaign: typeof campaigns[0]; idx: number }) {
-  const daysLeft = Math.max(
-    0,
-    Math.ceil((new Date(campaign.endDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-  );
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function daysLeftFrom(endDate: string): number {
+  return Math.max(0, Math.ceil((new Date(endDate).getTime() - Date.now()) / DAY_MS));
+}
+
+function CampaignCard({ campaign, idx }: { campaign: ActiveCampaign; idx: number }) {
+  const daysLeft = daysLeftFrom(campaign.endDate);
   const isExpired = daysLeft === 0;
 
   return (
@@ -49,25 +41,79 @@ function CampaignCard({ campaign, idx }: { campaign: typeof campaigns[0]; idx: n
           tone={isExpired ? "destructive" : daysLeft <= 7 ? "warning" : "success"}
           label={isExpired ? "Expired" : `${daysLeft} days left`}
         />
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white text-sm font-bold">
-          {campaign.discountPct}%
-        </div>
+        {campaign.discountLabel && (
+          <div className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-2 text-white text-sm font-bold">
+            {campaign.discountLabel}
+          </div>
+        )}
       </div>
       <div className="mt-4">
         <h3 className="text-lg font-bold text-white">{campaign.name}</h3>
         <p className="mt-1 text-sm text-white/50 line-clamp-2">{campaign.description}</p>
         <div className="mt-3 flex items-center gap-2 text-xs text-white/40">
           <CalendarDays className="h-3.5 w-3.5" />
-          Valid until {new Date(campaign.endDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+          Valid until{" "}
+          {new Date(campaign.endDate).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
         </div>
       </div>
     </div>
   );
 }
 
+function CardSkeleton() {
+  return (
+    <div className="min-h-[200px] animate-pulse rounded-xl border border-[#2A2A2A] bg-[#141414] p-6">
+      <div className="flex items-center justify-between">
+        <div className="h-5 w-24 rounded-full bg-white/5" />
+        <div className="h-10 w-10 rounded-full bg-white/5" />
+      </div>
+      <div className="mt-8 space-y-2">
+        <div className="h-5 w-2/3 rounded bg-white/5" />
+        <div className="h-4 w-full rounded bg-white/5" />
+        <div className="h-4 w-1/3 rounded bg-white/5" />
+      </div>
+    </div>
+  );
+}
+
 export default function CampaignsPage() {
-  // If no campaigns match the expiring/expired groups, show all as active
-  const hasGroups = expiringSoon.length > 0 || expired.length > 0;
+  const [campaigns, setCampaigns] = useState<ActiveCampaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/campaigns/active");
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error?.message ?? "Failed to load campaigns");
+        if (!cancelled) setCampaigns(body.data ?? []);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load campaigns");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { active, expiringSoon } = useMemo(() => {
+    const expiring: ActiveCampaign[] = [];
+    const rest: ActiveCampaign[] = [];
+    for (const c of campaigns) {
+      const d = daysLeftFrom(c.endDate);
+      if (d > 0 && d <= 7) expiring.push(c);
+      else rest.push(c);
+    }
+    return { active: rest, expiringSoon: expiring };
+  }, [campaigns]);
 
   return (
     <div className="space-y-8">
@@ -79,16 +125,28 @@ export default function CampaignsPage() {
         </p>
       </div>
 
+      {error && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Active Campaigns */}
       <div>
-        <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white/60">
           <Tag className="h-4 w-4" /> Active Campaigns
         </h2>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {(hasGroups ? activeCampaigns : campaigns).map((c, i) => (
-            <CampaignCard key={c.id} campaign={c} idx={i} />
-          ))}
-          {(hasGroups ? activeCampaigns : campaigns).length === 0 && (
+          {loading ? (
+            <>
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </>
+          ) : (
+            active.map((c, i) => <CampaignCard key={c.id} campaign={c} idx={i} />)
+          )}
+          {!loading && active.length === 0 && expiringSoon.length === 0 && !error && (
             <div className="col-span-full flex items-center justify-center rounded-xl border border-dashed border-[#2A2A2A] py-16">
               <p className="text-sm text-white/30">No active campaigns at this time.</p>
             </div>
@@ -97,28 +155,14 @@ export default function CampaignsPage() {
       </div>
 
       {/* Expiring Soon */}
-      {expiringSoon.length > 0 && (
+      {!loading && expiringSoon.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-orange-400/80 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-orange-400/80">
             <CalendarDays className="h-4 w-4" /> Expiring Soon
           </h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {expiringSoon.map((c, i) => (
-              <CampaignCard key={c.id} campaign={c} idx={i + activeCampaigns.length} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Expired */}
-      {expired.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-white/30 uppercase tracking-wider mb-4">
-            Past Campaigns
-          </h2>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 opacity-50">
-            {expired.map((c, i) => (
-              <CampaignCard key={c.id} campaign={c} idx={i} />
+              <CampaignCard key={c.id} campaign={c} idx={i + active.length} />
             ))}
           </div>
         </div>
