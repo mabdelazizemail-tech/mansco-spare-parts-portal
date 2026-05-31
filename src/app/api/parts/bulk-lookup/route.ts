@@ -3,9 +3,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { categories } from "@/lib/catalog";
 import {
   buildPartSearchResult,
+  buildPriceMap,
   type StockSnapshot,
   type PriceSnapshot,
 } from "@/lib/rules/parts-availability";
+import { getCampaignDiscounts } from "@/lib/rules/campaign-discount";
+import { resolveOptionalDealerId } from "@/lib/auth-guards";
 
 /**
  * POST /api/parts/bulk-lookup
@@ -107,11 +110,15 @@ export async function POST(req: NextRequest) {
         .select("part_number, unit_price, currency, price_list_id")
         .in("part_number", partNumbers);
       if (data) {
-        priceMap = new Map(data.map((r) => [r.part_number, r as PriceSnapshot]));
+        priceMap = buildPriceMap(data as PriceSnapshot[]);
       }
     } catch {
       // tolerate
     }
+
+    // Discount candidates — best-effort (no dealer = no discounts)
+    const dealerId = await resolveOptionalDealerId();
+    const discountMap = await getCampaignDiscounts(dealerId, partNumbers);
 
     // 4. Build PartSearchResult per requested item, preserving requested qty
     const results = items.map((item) => {
@@ -132,6 +139,7 @@ export async function POST(req: NextRequest) {
         stock: stockMap.get(partNum!) ?? null,
         price: priceMap.get(partNum!) ?? null,
         requestedQty: Math.max(1, Number(item.quantity) || 1),
+        discountCandidates: discountMap.get(partNum!) ?? null,
       });
 
       return {

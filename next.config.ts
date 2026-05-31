@@ -42,6 +42,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Pin the workspace root. Otherwise Next/Turbopack mis-detects it as the
+  // user's home dir (a stray package-lock.json lives there + multiple
+  // lockfiles), which breaks file-watching/HMR so dev edits never recompile.
+  turbopack: {
+    root: process.cwd(),
+  },
   // Build-time safety: do NOT ship type errors to production.
   // (Next 16 removed the `eslint` build hook; linting runs via `npm run lint`
   // in CI — see .github/workflows/ci.yml.)

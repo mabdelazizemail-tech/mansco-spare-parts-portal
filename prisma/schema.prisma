@@ -6,9 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ── Auth & Dealer Management ──
@@ -49,8 +48,8 @@ model Dealer {
   branchAddress         String
   dealerType            String   @db.VarChar(50)
   parentDealerCode      String?
-  creditLimit           Decimal  @db.Numeric(12, 2)
-  overdueBalance        Decimal  @default(0) @db.Numeric(12, 2)
+  creditLimit           Decimal  @db.Decimal(12, 2)
+  overdueBalance        Decimal  @default(0) @db.Decimal(12, 2)
   financialStatus       String   @default("active") @db.VarChar(50)
   registrationStatus    String   @default("pending") @db.VarChar(50)
   approvedBy            String?  @db.Uuid
@@ -142,8 +141,8 @@ model PriceListItem {
   partId                String   @db.Uuid
   part                  Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
   partNumber            String
-  unitPrice             Decimal  @db.Numeric(12, 2)
-  discountPct           Decimal  @default(0) @db.Numeric(5, 2)
+  unitPrice             Decimal  @db.Decimal(12, 2)
+  discountPct           Decimal  @default(0) @db.Decimal(5, 2)
   currency              String   @default("EGP")
   effectiveFrom         DateTime?
   effectiveTo           DateTime?
@@ -164,13 +163,13 @@ model Order {
   dealer                  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   orderType               String   @db.VarChar(50)
   status                  String   @default("submitted") @db.VarChar(50)
-  creditLimitAtOrder      Decimal  @db.Numeric(12, 2)
-  overdueBalanceAtOrder   Decimal  @db.Numeric(12, 2)
+  creditLimitAtOrder      Decimal  @db.Decimal(12, 2)
+  overdueBalanceAtOrder   Decimal  @db.Decimal(12, 2)
   financialBlock          Boolean  @default(false)
   financialBlockReason    String?
-  subtotal                Decimal  @db.Numeric(12, 2)
-  vatAmount               Decimal  @db.Numeric(12, 2)
-  totalAmount             Decimal  @db.Numeric(12, 2)
+  subtotal                Decimal  @db.Decimal(12, 2)
+  vatAmount               Decimal  @db.Decimal(12, 2)
+  totalAmount             Decimal  @db.Decimal(12, 2)
   approvedAt              DateTime?
   approvedBy              String?  @db.Uuid
   rejectedAt              DateTime?
@@ -205,8 +204,14 @@ model OrderLine {
   quantityRequested       Int
   quantityConfirmed       Int      @default(0)
   quantityBackordered     Int      @default(0)
-  unitPrice               Decimal  @db.Numeric(12, 2)
-  lineTotal               Decimal  @db.Numeric(12, 2)
+  unitPrice               Decimal  @db.Decimal(12, 2)
+  // Discount fields (auto-calculated from campaign eligibility)
+  campaignId              String?  @db.Uuid
+  discountPct             Decimal  @default(0) @db.Decimal(5, 2)
+  discountedUnitPrice     Decimal  @db.Decimal(12, 2)
+  totalDiscount           Decimal  @default(0) @db.Decimal(12, 2)
+  lineTotal               Decimal  @db.Decimal(12, 2)
+  originalLineTotal       Decimal  @db.Decimal(12, 2)
   lineStatus              String   @default("pending") @db.VarChar(50)
   availabilityAtOrder     String?
   backordeEta             DateTime?
@@ -279,7 +284,7 @@ model LostSale {
   part                    Part?    @relation(fields: [partNumber], references: [partNumber], onDelete: SetNull)
   quantity                Int      @default(1)
   reason                  String   @db.VarChar(100)
-  estimatedValue          Decimal  @db.Numeric(12, 2)
+  estimatedValue          Decimal  @db.Decimal(12, 2)
   etaIfAvailable          DateTime?
   customerName            String?
   createdAt               DateTime @default(now())
@@ -324,13 +329,13 @@ model CampaignItem {
   partNumber              String
   partDescription         String?
   discountType            String   @db.VarChar(50)
-  discountValue           Decimal  @db.Numeric(10, 2)
+  discountValue           Decimal  @db.Decimal(10, 2)
   minOrderQuantity        Int      @default(1)
   orderTypeRestriction    String[]
   totalInquiries          Int      @default(0)
   totalOrders             Int      @default(0)
   totalQtySold            Int      @default(0)
-  totalDiscountGiven      Decimal  @default(0) @db.Numeric(12, 2)
+  totalDiscountGiven      Decimal  @default(0) @db.Decimal(12, 2)
   totalBackorders         Int      @default(0)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -351,7 +356,7 @@ model CampaignOrder {
   orderId                 String?  @db.Uuid
   partNumber              String
   quantity                Int
-  discountApplied         Decimal  @db.Numeric(12, 2)
+  discountApplied         Decimal  @db.Decimal(12, 2)
   isFirstPurchase         Boolean  @default(false)
   createdAt               DateTime @default(now())
 
@@ -377,8 +382,8 @@ model DealerTarget {
   dealerId                String   @db.Uuid
   dealer                  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   period                  String
-  targetAmount            Decimal  @db.Numeric(12, 2)
-  achievedAmount          Decimal  @default(0) @db.Numeric(12, 2)
+  targetAmount            Decimal  @db.Decimal(12, 2)
+  achievedAmount          Decimal  @default(0) @db.Decimal(12, 2)
   kpiMetrics              Json?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

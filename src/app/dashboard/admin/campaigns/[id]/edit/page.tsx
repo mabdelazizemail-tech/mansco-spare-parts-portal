@@ -169,7 +169,22 @@ export default function EditCampaignPage() {
         await fetch(`/api/campaigns/${campaignId}/items?item_id=${itemId}`, { method: "DELETE" });
       }
 
-      // 3. Add new items
+      // 3. Update existing items that were modified
+      const existingItems = items.filter((i) => !i._isNew && i.id && i.part_number.trim());
+      for (const item of existingItems) {
+        await fetch(`/api/campaigns/${campaignId}/items/${item.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            part_description: item.part_description.trim() || null,
+            discount_type: item.discount_type,
+            discount_value: Number(item.discount_value),
+            min_order_quantity: Number(item.min_order_quantity) || 1,
+          }),
+        });
+      }
+
+      // 4. Add new items
       const newItems = items
         .filter((i) => i._isNew && i.part_number.trim())
         .map((i) => ({

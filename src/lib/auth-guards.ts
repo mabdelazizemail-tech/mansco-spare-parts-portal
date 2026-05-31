@@ -133,3 +133,36 @@ export async function requireDealerOwnership(
 
   return null;
 }
+
+/**
+ * Best-effort dealer lookup for routes that should still respond when the
+ * caller is anonymous or an admin (e.g. catalog browsing). Returns the
+ * authenticated dealer's UUID when one exists, otherwise null.
+ *
+ * Unlike `requireDealerSession`, this NEVER produces a NextResponse —
+ * callers use the null return to skip dealer-scoped enrichment (such as
+ * campaign discounts) without breaking the request.
+ */
+export async function resolveOptionalDealerId(): Promise<string | null> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const role = user.user_metadata?.role;
+    if (role !== "dealer" && role !== "sub_dealer") return null;
+    const { data: dealer } = await supabase
+      .from("dealers")
+      .select("id")
+      .eq("supabase_uid", user.id)
+      .maybeSingle();
+    return dealer?.id ?? null;
+  } catch (err) {
+    console.error(
+      "[resolveOptionalDealerId] unexpected error, falling back to no-discount path:",
+      err,
+    );
+    return null;
+  }
+}

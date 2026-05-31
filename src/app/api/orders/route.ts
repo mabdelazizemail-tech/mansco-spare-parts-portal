@@ -6,6 +6,11 @@ import {
   validateOrderSubmission,
   calculateEta,
 } from "@/lib/rules/order-validation";
+import {
+  getCampaignDiscounts,
+  pickWinningRule,
+  applyDiscount,
+} from "@/lib/rules/campaign-discount";
 
 /**
  * GET /api/orders — list orders (dealer sees own, admin sees all)
@@ -157,11 +162,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Calculate totals
-    const subtotal = items.reduce(
-      (s: number, i: { quantity: number; unit_price: number }) => s + i.quantity * i.unit_price,
-      0
-    );
+    // Calculate totals with campaign discounts (batched: one DB query for all items)
+    let subtotal = 0;
+    let totalDiscount = 0;
+
+    const partNumbers = items.map((it: { part_number: string }) => it.part_number);
+    const discountMap = await getCampaignDiscounts(dealer_id, partNumbers);
+
+    const itemsWithDiscounts: Array<{
+      quantity: number;
+      unit_price: number;
+      campaignId?: string;
+      discountPct: number;
+      discountedUnitPrice: number;
+      totalDiscount: number;
+      originalLineTotal: number;
+      lineTotal: number;
+    }> = [];
+
+    for (const item of items) {
+      const unitPrice = Number(item.unit_price);
+      const candidates = discountMap.get(item.part_number) ?? null;
+      const rule = pickWinningRule(candidates, unitPrice);
+      const applied = applyDiscount(unitPrice, rule);
+
+      const discountedUnitPrice = applied?.discountedUnitPrice ?? unitPrice;
+      const discountPct = applied?.discountPct ?? 0;
+      const originalLineTotal = Math.round(unitPrice * item.quantity * 100) / 100;
+      const lineTotal = Math.round(discountedUnitPrice * item.quantity * 100) / 100;
+      const lineDiscount = Math.round((originalLineTotal - lineTotal) * 100) / 100;
+
+      itemsWithDiscounts.push({
+        quantity: item.quantity,
+        unit_price: unitPrice,
+        campaignId: rule?.campaignId,
+        discountPct,
+        discountedUnitPrice,
+        totalDiscount: lineDiscount,
+        originalLineTotal,
+        lineTotal,
+      });
+
+      subtotal += lineTotal;
+      totalDiscount += lineDiscount;
+    }
+
     const vatAmount = Math.round(subtotal * 0.14);
     const totalAmount = subtotal + vatAmount;
 
@@ -256,26 +301,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Insert order lines
-    const lines = items.map((item: {
-      part_number: string;
-      part_name: string;
-      part_name_ar?: string;
-      quantity: number;
-      unit_price: number;
-      currency?: string;
-      availability_state?: string;
-    }) => ({
-      order_id: order.id,
-      part_number: item.part_number,
-      part_name: item.part_name,
-      part_name_ar: item.part_name_ar ?? null,
-      quantity_requested: item.quantity,
-      unit_price: item.unit_price,
-      line_total: item.quantity * item.unit_price,
-      currency: item.currency ?? "EGP",
-      availability_at_order: item.availability_state ?? null,
-    }));
+    // Insert order lines with discount info
+    const lines = itemsWithDiscounts.map((itemDiscount, idx) => {
+      const item = items[idx];
+      return {
+        order_id: order.id,
+        part_number: item.part_number,
+        part_name: item.part_name,
+        part_name_ar: item.part_name_ar ?? null,
+        quantity_requested: item.quantity,
+        unit_price: item.unit_price,
+        campaign_id: itemDiscount.campaignId ?? null,
+        discount_pct: itemDiscount.discountPct,
+        discounted_unit_price: itemDiscount.discountedUnitPrice,
+        total_discount: itemDiscount.totalDiscount,
+        original_line_total: itemDiscount.originalLineTotal,
+        line_total: itemDiscount.lineTotal,
+        currency: item.currency ?? "EGP",
+        availability_at_order: item.availability_state ?? null,
+      };
+    });
 
     const { error: linesError } = await supabaseAdmin
       .from("order_lines")
@@ -313,6 +358,10 @@ export async function POST(req: NextRequest) {
           financial_block: validation.financialBlock,
           review_reasons: validation.reasons,
           eta: etaDate,
+          subtotal: subtotal + totalDiscount, // Original subtotal before discount
+          total_discount: Math.round(totalDiscount * 100) / 100,
+          subtotal_after_discount: subtotal,
+          vat_amount: vatAmount,
           total_amount: totalAmount,
         },
       },

@@ -392,6 +392,13 @@ export default function AdminCampaignsPage() {
             Refresh
           </button>
           <button
+            onClick={() => router.push("/dashboard/admin/reports/discounts")}
+            className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2 text-xs font-semibold text-emerald-400 transition hover:border-emerald-500/50 hover:bg-emerald-500/10"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Discount Analytics
+          </button>
+          <button
             onClick={() => router.push("/dashboard/admin/campaigns/new")}
             className="flex items-center gap-2 rounded-lg bg-[#00BFA6] px-4 py-2 text-xs font-semibold text-black transition hover:bg-[#00BFA6]/90"
           >

@@ -3,9 +3,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { categories } from "@/lib/catalog";
 import {
   buildPartSearchResult,
+  pickPrice,
   type StockSnapshot,
   type PriceSnapshot,
 } from "@/lib/rules/parts-availability";
+import { getCampaignDiscounts } from "@/lib/rules/campaign-discount";
+import { resolveOptionalDealerId } from "@/lib/auth-guards";
 
 /**
  * GET /api/parts/[partNumber]
@@ -77,21 +80,26 @@ export async function GET(
       // tolerate missing table
     }
     try {
+      // Fetch ALL price rows for the part (it may have STANDARD + ADMIN_MANUAL)
+      // and resolve to the winning tag. maybeSingle() would error on >1 row.
       const { data } = await supabaseAdmin
         .from("price_list_items")
         .select("part_number, unit_price, currency, price_list_id")
-        .eq("part_number", partNumber)
-        .maybeSingle();
-      if (data) price = data as PriceSnapshot;
+        .eq("part_number", partNumber);
+      price = pickPrice(data as PriceSnapshot[] | null);
     } catch {
       // tolerate
     }
+
+    const dealerId = await resolveOptionalDealerId();
+    const discountMap = await getCampaignDiscounts(dealerId, [partNumber]);
 
     const result = buildPartSearchResult({
       catalog: catalogRow,
       stock,
       price,
       requestedQty: qty,
+      discountCandidates: discountMap.get(partNumber) ?? null,
     });
 
     return NextResponse.json({ data: result });

@@ -1,6 +1,7 @@
 "use client";
 
-import { Download, TrendingDown, TrendingUp, FileText } from "lucide-react";
+import Link from "next/link";
+import { Download, TrendingDown, TrendingUp, FileText, Tag } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import {
   inquiries,
@@ -72,12 +73,22 @@ export default function AdminReportsPage() {
             Operational analytics, inquiries, and lost-sales tracking.
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="border-[#2A2A2A] bg-[#1A1A1A] text-white/60 hover:border-[#3A3A3A] hover:bg-[#1A1A1A] hover:text-white"
-        >
-          <Download className="me-2 h-4 w-4" /> {t("common.export")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/admin/reports/discounts">
+            <Button
+              variant="outline"
+              className="border-emerald-500/30 bg-emerald-500/5 text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300"
+            >
+              <Tag className="me-2 h-4 w-4" /> Discount Analytics
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            className="border-[#2A2A2A] bg-[#1A1A1A] text-white/60 hover:border-[#3A3A3A] hover:bg-[#1A1A1A] hover:text-white"
+          >
+            <Download className="me-2 h-4 w-4" /> {t("common.export")}
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="operational" className="space-y-6">
