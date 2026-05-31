@@ -72,6 +72,8 @@ type OrderDetail = {
   id: string;
   order_number: string;
   dealer_id: string;
+  dealer_name?: string | null;
+  dealer_code?: string | null;
   order_type: string;
   status: string;
   submitted_at: string;
@@ -139,36 +141,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
 
-  // Resolve dealer name from dealer_id (UUID or code)
+  // Dealer label is resolved server-side by /api/orders/[id] (service-role,
+  // not subject to RLS). Prefer the company name, then the dealer code.
   useEffect(() => {
-    if (!order?.dealer_id) {
-      setDealerName(null);
-      return;
-    }
-    const dealerId = order.dealer_id;
-    const supabase = createClient();
-    // Try lookup by id (UUID) first, then by code
-    supabase
-      .from("dealers")
-      .select("company_name")
-      .eq("id", dealerId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.company_name) {
-          setDealerName(data.company_name);
-        } else {
-          // Fallback: try by code
-          supabase
-            .from("dealers")
-            .select("company_name")
-            .eq("code", dealerId)
-            .maybeSingle()
-            .then(({ data: byCode }) => {
-              setDealerName(byCode?.company_name ?? null);
-            });
-        }
-      });
-  }, [order?.dealer_id]);
+    setDealerName(order?.dealer_name ?? order?.dealer_code ?? null);
+  }, [order?.dealer_name, order?.dealer_code]);
 
   const handleReview = async (action: string) => {
     if (!order) return;

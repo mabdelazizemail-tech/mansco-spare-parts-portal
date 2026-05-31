@@ -36,7 +36,29 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ data });
+    // Resolve a human-readable dealer label server-side (service-role client is
+    // not subject to RLS). `dealer_id` may hold a dealers.id (UUID) or a
+    // dealers.code, so look up by both.
+    let dealerName: string | null = null;
+    let dealerCode: string | null = null;
+    if (data.dealer_id) {
+      const dealerIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        data.dealer_id
+      );
+      const { data: dealer } = await supabaseAdmin
+        .from("dealers")
+        .select("company_name, code")
+        .eq(dealerIsUuid ? "id" : "code", data.dealer_id)
+        .maybeSingle();
+      if (dealer) {
+        dealerName = dealer.company_name ?? null;
+        dealerCode = dealer.code ?? null;
+      }
+    }
+
+    return NextResponse.json({
+      data: { ...data, dealer_name: dealerName, dealer_code: dealerCode },
+    });
   } catch (e) {
     return NextResponse.json(
       { error: { code: "SERVER_ERROR", message: e instanceof Error ? e.message : "Failed to fetch order" } },
