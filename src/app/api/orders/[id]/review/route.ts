@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canTransition } from "@/lib/rules/order-validation";
 import { getAdminUser } from "@/lib/auth-guards";
 import { serverError } from "@/lib/api-errors";
+import { syncBackordersForOrder } from "@/lib/backorders/service";
 
 /**
  * POST /api/orders/[id]/review — admin actions on an order under review.
@@ -201,6 +202,17 @@ export async function POST(
             .update({ line_status: "confirmed", quantity_confirmed: line.quantity_requested })
             .eq("id", line.id);
         }
+      }
+    }
+
+    // Reconcile back-orders against the (possibly updated) line quantities.
+    // partial_approve may have set quantity_backordered on some lines; approve
+    // confirms everything (which closes any stale back-orders). Non-fatal.
+    if (action === "partial_approve" || action === "approve") {
+      try {
+        await syncBackordersForOrder(id);
+      } catch (e) {
+        console.error("[orders/[id]/review] back-order sync failed:", e);
       }
     }
 

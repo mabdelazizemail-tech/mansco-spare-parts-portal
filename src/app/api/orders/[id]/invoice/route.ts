@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { issueInvoiceForOrder } from "@/lib/invoices/service";
 
 /**
  * POST /api/orders/[id]/invoice — issue an invoice for an existing order.
@@ -88,47 +89,43 @@ export async function POST(
       );
     }
 
-    // 2. Generate an invoice number if none was supplied. Format:
-    //    INV-{YEAR}-{sequence padded to 4 digits}. Sequence is derived from
-    //    the count of existing invoices this year — good enough for Phase 1.
-    let invoiceNumber = body.invoice_number?.trim();
-    if (!invoiceNumber) {
-      const year = new Date().getFullYear();
-      const { count } = await supabaseAdmin
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .not("invoice_number", "is", null)
-        .gte("invoice_date", `${year}-01-01`)
-        .lt("invoice_date", `${year + 1}-01-01`);
-      const seq = (count ?? 0) + 1;
-      invoiceNumber = `INV-${year}-${String(seq).padStart(4, "0")}`;
-    } else {
-      // If admin supplied one, make sure it isn't already taken.
-      const { data: existing } = await supabaseAdmin
-        .from("orders")
-        .select("id")
-        .eq("invoice_number", invoiceNumber)
-        .maybeSingle();
-      if (existing) {
+    // 2. Create the real invoice record (header + lines) from the order's
+    //    confirmed lines. The service generates the INV-YYYY-NNNN number (or
+    //    uses the admin-supplied one) and guards against duplicates.
+    let invoice;
+    try {
+      invoice = await issueInvoiceForOrder({
+        orderId: id,
+        userId: user.id,
+        invoiceNumber: body.invoice_number?.trim(),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to issue invoice";
+      if (message.includes("already in use")) {
         return NextResponse.json(
-          {
-            error: {
-              code: "DUPLICATE_INVOICE_NUMBER",
-              message: `Invoice number ${invoiceNumber} is already in use`,
-            },
-          },
+          { error: { code: "DUPLICATE_INVOICE_NUMBER", message } },
           { status: 409 }
         );
       }
+      if (message.includes("no lines") || message.includes("No confirmed")) {
+        return NextResponse.json(
+          { error: { code: "NOTHING_TO_INVOICE", message } },
+          { status: 400 }
+        );
+      }
+      throw e;
     }
 
-    // 3. Stamp the invoice fields and move order to "invoiced".
+    const invoiceNumber = invoice.invoice_number;
+
+    // 3. Stamp the legacy invoice fields on the order (backward compat) and
+    //    move the order to "invoiced".
     const nowIso = new Date().toISOString();
     const { data: updated, error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
         invoice_number: invoiceNumber,
-        invoice_date: nowIso,
+        invoice_date: invoice.invoice_date,
         invoiced_by: user.id,
         status: "invoiced",
         updated_at: nowIso,
@@ -157,7 +154,7 @@ export async function POST(
       // non-fatal
     }
 
-    return NextResponse.json({ data: updated });
+    return NextResponse.json({ data: { ...updated, invoice_id: invoice.id } });
   } catch (e) {
     return NextResponse.json(
       {

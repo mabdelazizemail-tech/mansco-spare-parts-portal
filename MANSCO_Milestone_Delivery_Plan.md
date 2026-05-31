@@ -187,11 +187,11 @@ Based on the full codebase analysis, the system is composed of **9 major modules
 - Status lifecycle: Submitted → Under Review → Approved/Rejected → Done/Partial/Backordered → Invoiced → Shipped → Delivered
 
 ### Module 6 — Fulfillment Tracking (Invoices, Shipments, Back-Orders)
-**Status: 🔲 Pending**
-- Invoice listing and detail view (linked to fulfilled orders)
-- Shipment tracking with carrier/AWB/DHL reference
-- Back-order management with ETA tracking and recalculation
-- Partial fulfillment workflow (confirmed lines vs. back-order lines)
+**Status: ✅ Delivered**
+- **Phase 1 — Shipment tracking:** carrier/AWB/DHL references, multi-shipment per order, line-level shipped quantities, status workflow + audit, global + order-scoped views
+- **Phase 2 — Partial fulfillment & invoices:** pure split engine (confirmed vs. back-order with 30% value-ratio review threshold), real `invoices`/`invoice_lines` tables generated from confirmed order lines (replacing the `orders.invoice_number` stopgap), dealer invoice list + detail with aging/outstanding balance
+- **Phase 3 — Back-orders & admin fulfillment:** `back_orders` + `back_order_eta_changes` tables fed by the split engine at order approval, ETA recalculation with slippage/at-risk flagging (>7-day threshold), live dealer Back-Orders page with ETA history, admin Fulfillment Dashboard (KPIs + at-risk/overdue/pending action queues with ETA override & cancel)
+- Manual/CSV tracking only — live carrier-API integration (DHL) and payment processing remain out of scope per E3/E5
 
 ### Module 7 — Financial Dashboard & KPIs (Dealer-Facing)
 **Status: 🟡 UI Delivered / Backend Integration Pending**

@@ -135,6 +135,65 @@ export async function requireDealerOwnership(
 }
 
 /**
+ * Resolve how the current session should be scoped for dealer-owned
+ * collections (invoices, back-orders, orders).
+ *
+ * - admin / super_admin → { isAdmin: true, scope: null }   (sees everything)
+ * - dealer / sub_dealer → { isAdmin: false, scope: [uuid, code] }
+ *
+ * The scope contains BOTH the dealer's UUID and code because different tables
+ * persist `dealer_id` differently (orders/back_orders/invoices store the
+ * CODE, while some helpers use the UUID). Filtering with `.in("dealer_id",
+ * scope)` is robust to either convention.
+ *
+ * Returns a NextResponse error for unauthenticated or unknown-role callers.
+ */
+export async function resolveDealerScope(): Promise<
+  { isAdmin: boolean; scope: string[] | null } | NextResponse
+> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+      { status: 401 }
+    );
+  }
+
+  const role = user.user_metadata?.role;
+  if (role === "admin" || role === "super_admin") {
+    return { isAdmin: true, scope: null };
+  }
+  if (role !== "dealer" && role !== "sub_dealer") {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Access denied" } },
+      { status: 403 }
+    );
+  }
+
+  const { data: dealer } = await supabase
+    .from("dealers")
+    .select("id, code")
+    .eq("supabase_uid", user.id)
+    .maybeSingle();
+
+  if (!dealer) {
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Dealer profile not found" } },
+      { status: 404 }
+    );
+  }
+
+  const scope = [dealer.id, dealer.code].filter(
+    (v): v is string => typeof v === "string" && v.length > 0
+  );
+  return { isAdmin: false, scope };
+}
+
+/**
  * Best-effort dealer lookup for routes that should still respond when the
  * caller is anonymous or an admin (e.g. catalog browsing). Returns the
  * authenticated dealer's UUID when one exists, otherwise null.

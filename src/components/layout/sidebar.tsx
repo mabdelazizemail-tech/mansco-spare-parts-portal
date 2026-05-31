@@ -20,6 +20,7 @@ import {
   UserCheck,
   Database,
   Package,
+  Truck,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { usePortal } from "@/lib/portal-data";
@@ -73,6 +74,7 @@ const adminNav: NavSection[] = [
   {
     label: "FULFILLMENT",
     items: [
+      { href: "/dashboard/admin/fulfillment", label: "Fulfillment Dashboard", icon: Truck },
       { href: "/dashboard/admin/orders", label: "Order History", icon: FileText },
       { href: "/dashboard/admin/invoicing", label: "Invoicing", icon: Receipt },
     ],
