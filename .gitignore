@@ -43,3 +43,7 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+# stray build/diagnostic output
+tsc_output*.txt
+*.bak
