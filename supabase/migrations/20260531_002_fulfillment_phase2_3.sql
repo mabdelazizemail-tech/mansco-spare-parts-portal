@@ -121,13 +121,18 @@ ALTER TABLE invoice_lines          ENABLE ROW LEVEL SECURITY;
 
 -- Dealers see their own; admins see all. (App reads via service role, which
 -- bypasses RLS — these mirror orders for any direct client read path.)
+-- DROP-then-CREATE so the migration is fully re-runnable (CREATE POLICY has
+-- no IF NOT EXISTS in Postgres).
+DROP POLICY IF EXISTS "Dealers see own back_orders" ON back_orders;
 CREATE POLICY "Dealers see own back_orders"
   ON back_orders FOR SELECT
   USING (auth.uid()::text = dealer_id OR auth.jwt() ->> 'role' IN ('admin','super_admin'));
 
+DROP POLICY IF EXISTS "Service role full access back_orders" ON back_orders;
 CREATE POLICY "Service role full access back_orders"
   ON back_orders FOR ALL USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "ETA changes follow back_order access" ON back_order_eta_changes;
 CREATE POLICY "ETA changes follow back_order access"
   ON back_order_eta_changes FOR SELECT
   USING (
@@ -138,16 +143,20 @@ CREATE POLICY "ETA changes follow back_order access"
     )
   );
 
+DROP POLICY IF EXISTS "Service role full access back_order_eta_changes" ON back_order_eta_changes;
 CREATE POLICY "Service role full access back_order_eta_changes"
   ON back_order_eta_changes FOR ALL USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Dealers see own invoices" ON invoices;
 CREATE POLICY "Dealers see own invoices"
   ON invoices FOR SELECT
   USING (auth.uid()::text = dealer_id OR auth.jwt() ->> 'role' IN ('admin','super_admin'));
 
+DROP POLICY IF EXISTS "Service role full access invoices" ON invoices;
 CREATE POLICY "Service role full access invoices"
   ON invoices FOR ALL USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Invoice lines follow invoice access" ON invoice_lines;
 CREATE POLICY "Invoice lines follow invoice access"
   ON invoice_lines FOR SELECT
   USING (
@@ -158,6 +167,7 @@ CREATE POLICY "Invoice lines follow invoice access"
     )
   );
 
+DROP POLICY IF EXISTS "Service role full access invoice_lines" ON invoice_lines;
 CREATE POLICY "Service role full access invoice_lines"
   ON invoice_lines FOR ALL USING (true) WITH CHECK (true);
 
