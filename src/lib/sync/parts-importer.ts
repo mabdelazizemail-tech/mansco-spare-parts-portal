@@ -18,6 +18,7 @@
  */
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { parseCsv } from "./csv";
 
 export type SyncResult = {
   sync_log_id: string;
@@ -27,8 +28,6 @@ export type SyncResult = {
   error_details: { row: number; reason: string; data?: Record<string, unknown> }[];
   duration_ms: number;
 };
-
-type CsvRow = Record<string, string>;
 
 async function startSyncLog(file_type: SyncResult["file_type"], file_name: string): Promise<string> {
   const { data, error } = await supabaseAdmin
@@ -63,70 +62,6 @@ async function completeSyncLog(
       completed_at: new Date().toISOString(),
     })
     .eq("id", id);
-}
-
-/**
- * Minimal RFC-4180-compatible CSV parser.
- * Handles quoted fields, escaped quotes (""), and embedded commas/newlines.
- * Adequate for the structured SAP exports we control; switch to papaparse
- * if dealing with messier upstream sources.
- */
-function parseCsv(content: string): CsvRow[] {
-  const text = content.replace(/^﻿/, ""); // strip BOM
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ",") {
-        row.push(field);
-        field = "";
-      } else if (ch === "\n" || ch === "\r") {
-        // skip the second char of \r\n
-        if (ch === "\r" && text[i + 1] === "\n") i++;
-        row.push(field);
-        field = "";
-        rows.push(row);
-        row = [];
-      } else {
-        field += ch;
-      }
-    }
-  }
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-
-  if (rows.length === 0) return [];
-  const headers = rows[0].map((h) => h.trim().toLowerCase());
-  const out: CsvRow[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (r.length === 1 && r[0] === "") continue; // skip empty lines
-    const obj: CsvRow = {};
-    for (let c = 0; c < headers.length; c++) {
-      obj[headers[c]] = (r[c] ?? "").trim();
-    }
-    out.push(obj);
-  }
-  return out;
 }
 
 // ── Stock import ─────────────────────────────────────────────────────────
