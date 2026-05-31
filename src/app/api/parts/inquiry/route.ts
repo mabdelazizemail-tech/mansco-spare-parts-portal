@@ -4,9 +4,11 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireDealerSession } from "@/lib/auth-guards";
 import {
   buildPartSearchResult,
+  pickPrice,
   type StockSnapshot,
   type PriceSnapshot,
 } from "@/lib/rules/parts-availability";
+import { getCampaignDiscounts } from "@/lib/rules/campaign-discount";
 import { categories } from "@/lib/catalog";
 
 /**
@@ -87,9 +89,8 @@ export async function POST(req: NextRequest) {
       const { data } = await supabaseAdmin
         .from("price_list_items")
         .select("part_number, unit_price, currency, price_list_id")
-        .eq("part_number", part_number)
-        .maybeSingle();
-      if (data) price = data as PriceSnapshot;
+        .eq("part_number", part_number);
+      price = pickPrice(data as PriceSnapshot[] | null);
     } catch {}
 
     const { data: catalogData, error: catalogError } = await supabaseAdmin
@@ -128,11 +129,17 @@ export async function POST(req: NextRequest) {
       oem: catalogData.oem ?? undefined,
     };
 
+    const discountMap = await getCampaignDiscounts(
+      authenticatedDealerIdOrError as string,
+      [part_number],
+    );
+
     const snapshot = buildPartSearchResult({
       catalog: catalogRow,
       stock,
       price,
       requestedQty: qty,
+      discountCandidates: discountMap.get(part_number) ?? null,
     });
 
     // 1. Always record the inquiry

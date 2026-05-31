@@ -71,11 +71,6 @@ const statusConfig: Record<
     color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
     icon: PackageCheck,
   },
-  processing: {
-    key: "status.processing",
-    color: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400",
-    icon: Clock,
-  },
 };
 
 interface OrderStatusBadgeProps {

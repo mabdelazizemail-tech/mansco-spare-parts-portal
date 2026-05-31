@@ -10,8 +10,6 @@ import {
   statusTone,
   statusLabel,
   orderTypeMeta,
-  campaigns,
-  type OrderStatus,
 } from "@/lib/portal-data";
 import { StatusBadge } from "@/components/portal/status-badge";
 import { Button } from "@/components/ui/button";
@@ -73,10 +71,13 @@ function KpiCard({
   );
 }
 
+type ActiveCampaign = { id: string; name: string; end_date: string; discountLabel: string | null };
+
 export default function DealerDashboard() {
   const router = useRouter();
-  const { dealer, orders: myOrders, stats } = usePortal();
+  const { dealer, orders: myOrders, stats, inquiries } = usePortal();
   const [companyName, setCompanyName] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<ActiveCampaign[]>([]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -86,6 +87,14 @@ export default function DealerDashboard() {
       setCompanyName(name || dealer.name);
     });
   }, [dealer.name]);
+
+  // Live active campaigns targeted to this dealer.
+  useEffect(() => {
+    fetch("/api/campaigns/active")
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((body) => setCampaigns(body.data ?? []))
+      .catch(() => setCampaigns([]));
+  }, []);
 
   const recentOrders = myOrders.slice(0, 5);
   const openOrders = myOrders.filter(
@@ -163,11 +172,10 @@ export default function DealerDashboard() {
         />
         <KpiCard
           icon={Target}
-          label="Monthly Target"
-          value={`${stats.targetPercent}%`}
-          sub={`${formatEGP(stats.monthlyRevenue)} achieved`}
-          progress={stats.targetPercent}
-          tone={stats.targetPercent >= 80 ? "success" : stats.targetPercent >= 50 ? "warning" : "destructive"}
+          label="Revenue (MTD)"
+          value={formatEGP(stats.monthlyRevenue)}
+          sub="No target set"
+          tone="info"
         />
         <KpiCard
           icon={ShieldCheck}
@@ -261,17 +269,20 @@ export default function DealerDashboard() {
                   key={c.id}
                   className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#111] p-3"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#00BFA6]/10 text-[#00BFA6] text-sm font-bold shrink-0">
-                    {c.discountPercent}%
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#00BFA6]/10 text-[#00BFA6] text-xs font-bold shrink-0">
+                    {c.discountLabel ?? "★"}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{c.title}</p>
+                    <p className="text-sm font-medium text-white truncate">{c.name}</p>
                     <p className="text-xs text-white/40">
-                      Until {new Date(c.validUntil).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                      Until {new Date(c.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
                     </p>
                   </div>
                 </div>
               ))}
+              {campaigns.length === 0 && (
+                <p className="py-4 text-center text-xs text-white/30">No active campaigns.</p>
+              )}
             </div>
           </div>
 
@@ -301,12 +312,14 @@ export default function DealerDashboard() {
             </div>
             <div className="flex gap-6">
               <div>
-                <p className="text-2xl font-bold text-white">{stats.totalOrders}</p>
+                <p className="text-2xl font-bold text-white">{inquiries.length}</p>
                 <p className="text-xs text-white/40">Total searches</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{stats.pendingOrders}</p>
-                <p className="text-xs text-white/40">Saved inquiries</p>
+                <p className="text-2xl font-bold text-white">
+                  {inquiries.filter((i) => i.inquiryType === "order_attempt").length}
+                </p>
+                <p className="text-xs text-white/40">Order attempts</p>
               </div>
             </div>
           </div>

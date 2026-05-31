@@ -92,6 +92,11 @@ export default function NewOrderPage() {
     order_number: string;
     needs_review: boolean;
     reasons: string[];
+    subtotal?: number;
+    total_discount?: number;
+    subtotal_after_discount?: number;
+    vat_amount?: number;
+    total_amount?: number;
   } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const submitIdRef = useRef(0); // double-submit guard
@@ -131,6 +136,10 @@ export default function NewOrderPage() {
                 replenishment_eta: string | null;
                 unit_price: number;
                 currency: string | null;
+                campaign_id?: string | null;
+                discount_pct?: number;
+                original_unit_price?: number | null;
+                discounted_unit_price?: number | null;
               }): CartPartSnapshot => ({
                 part_number: p.part_number,
                 name: p.name,
@@ -145,6 +154,10 @@ export default function NewOrderPage() {
                 replenishment_eta: p.replenishment_eta,
                 unit_price: p.unit_price,
                 currency: p.currency ?? "EGP",
+                campaign_id: p.campaign_id ?? null,
+                discount_pct: p.discount_pct ?? 0,
+                original_unit_price: p.original_unit_price ?? null,
+                discounted_unit_price: p.discounted_unit_price ?? null,
               })
             );
           setSearchResults(results);
@@ -197,6 +210,11 @@ export default function NewOrderPage() {
         order_number: body.data.order_number,
         needs_review: body.data.needs_review,
         reasons: body.data.review_reasons ?? [],
+        subtotal: body.data.subtotal,
+        total_discount: body.data.total_discount,
+        subtotal_after_discount: body.data.subtotal_after_discount,
+        vat_amount: body.data.vat_amount,
+        total_amount: body.data.total_amount,
       });
       cart.clearCart();
     } catch (e) {
@@ -223,6 +241,40 @@ export default function NewOrderPage() {
             {submitSuccess.order_number}
           </p>
         </div>
+
+        {/* Order Summary with Discount Breakdown */}
+        {submitSuccess.total_amount && (
+          <div className="w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h3 className="text-sm font-semibold text-white mb-4">Order Summary</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-white/60">
+                <span>Original Subtotal</span>
+                <span className="line-through">
+                  {formatEGP(submitSuccess.subtotal || 0)}
+                </span>
+              </div>
+              {submitSuccess.total_discount && submitSuccess.total_discount > 0 && (
+                <div className="flex justify-between text-emerald-400 font-semibold">
+                  <span>Campaign Discount</span>
+                  <span>-{formatEGP(submitSuccess.total_discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-white/60 border-t border-[#2A2A2A] pt-2">
+                <span>Subtotal</span>
+                <span>{formatEGP(submitSuccess.subtotal_after_discount || 0)}</span>
+              </div>
+              <div className="flex justify-between text-white/60">
+                <span>VAT (14%)</span>
+                <span>{formatEGP(submitSuccess.vat_amount || 0)}</span>
+              </div>
+              <div className="flex justify-between text-white font-bold text-base border-t border-[#2A2A2A] pt-2">
+                <span>Total</span>
+                <span>{formatEGP(submitSuccess.total_amount)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {submitSuccess.needs_review && (
           <div className="flex items-start gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-5 py-4 max-w-md">
             <ShieldAlert className="h-5 w-5 text-yellow-400 mt-0.5 shrink-0" />
@@ -315,7 +367,7 @@ export default function NewOrderPage() {
                   Qty
                 </th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-white/40 uppercase">
-                  Unit Price
+                  Price
                 </th>
                 <th className="px-5 py-3 text-right text-xs font-medium text-white/40 uppercase">
                   Line Total
@@ -366,10 +418,34 @@ export default function NewOrderPage() {
                   colSpan={3}
                   className="px-5 py-3 text-right text-sm text-white/50"
                 >
+                  Original Subtotal
+                </td>
+                <td className="px-5 py-3 text-right text-white/70 line-through">
+                  {formatEGP(cart.subtotal)}
+                </td>
+              </tr>
+              {cart.totalDiscount > 0 && (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-5 py-2 text-right text-sm text-emerald-400"
+                  >
+                    Campaign Discount
+                  </td>
+                  <td className="px-5 py-2 text-right font-semibold text-emerald-400">
+                    -{formatEGP(cart.totalDiscount)}
+                  </td>
+                </tr>
+              )}
+              <tr>
+                <td
+                  colSpan={3}
+                  className="px-5 py-3 text-right text-sm text-white/50"
+                >
                   Subtotal
                 </td>
                 <td className="px-5 py-3 text-right font-bold text-white">
-                  {formatEGP(cart.subtotal)}
+                  {formatEGP(cart.subtotalAfterDiscount)}
                 </td>
               </tr>
               <tr>
@@ -797,9 +873,21 @@ export default function NewOrderPage() {
                 </span>
               </div>
               <div className="border-t border-[#2A2A2A] pt-2" />
+              {cart.totalDiscount > 0 && (
+                <>
+                  <div className="flex justify-between text-white/40">
+                    <span>Original</span>
+                    <span className="text-white/40 line-through">{formatEGP(cart.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-400">
+                    <span>Campaign Discount</span>
+                    <span>-{formatEGP(cart.totalDiscount)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-white/40">
                 <span>Subtotal</span>
-                <span className="text-white">{formatEGP(cart.subtotal)}</span>
+                <span className="text-white">{formatEGP(cart.subtotalAfterDiscount)}</span>
               </div>
               <div className="flex justify-between text-white/40">
                 <span>VAT (14%)</span>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminUser } from "@/lib/auth-guards";
 
 // Valid state transitions
 const TRANSITIONS: Record<string, string[]> = {
@@ -14,6 +15,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   try {
     const { status: newStatus, reason } = await req.json();
@@ -82,6 +85,7 @@ export async function POST(
         to: newStatus,
         ...(reason ? { reason } : {}),
       },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data });

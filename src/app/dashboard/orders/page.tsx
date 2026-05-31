@@ -5,7 +5,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/portal/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { Search, Plus, ChevronRight, Loader2, RefreshCw, Tag } from "lucide-react";
 
 type ToneColor = "success" | "warning" | "destructive" | "info" | "muted" | "accent";
 
@@ -18,8 +18,20 @@ type OrderRow = {
   submitted_at: string;
   total_amount: number;
   currency: string;
-  order_lines: { id: string }[];
+  order_lines: {
+    id: string;
+    campaign_id?: string | null;
+    discount_pct?: number;
+    total_discount?: number;
+  }[];
 };
+
+function getOrderDiscount(order: OrderRow): number {
+  return (order.order_lines ?? []).reduce(
+    (sum, l) => sum + Number(l.total_discount ?? 0),
+    0
+  );
+}
 
 const STATUS_OPTIONS = [
   { key: "all", label: "All" },
@@ -209,42 +221,62 @@ export default function OrdersList() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((o) => (
-                <tr key={o.id} className="border-b border-[#2A2A2A]/50 hover:bg-white/[0.02]">
-                  <td className="px-5 py-3">
-                    <Link
-                      href={`/dashboard/orders/${o.id}`}
-                      className="font-mono text-xs font-semibold text-[#00BFA6] hover:underline"
-                    >
-                      {o.order_number}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3">
-                    <StatusBadge tone={typeTone[o.order_type] ?? "muted"} label={typeLabel[o.order_type] ?? o.order_type} />
-                  </td>
-                  <td className="px-5 py-3 text-white/60">
-                    {new Date(o.submitted_at).toLocaleDateString("en-GB", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="px-5 py-3 text-white/60">
-                    {o.order_lines?.length ?? 0} line{(o.order_lines?.length ?? 0) !== 1 ? "s" : ""}
-                  </td>
-                  <td className="px-5 py-3">
-                    <StatusBadge tone={statusTone(o.status)} label={statusLabel(o.status)} />
-                  </td>
-                  <td className="px-5 py-3 text-right font-semibold text-white">
-                    {formatEGP(o.total_amount)}
-                  </td>
-                  <td className="px-5 py-3">
-                    <Link href={`/dashboard/orders/${o.id}`}>
-                      <ChevronRight className="h-4 w-4 text-white/20" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {orders.map((o) => {
+                const orderDiscount = getOrderDiscount(o);
+                const hasDiscount = orderDiscount > 0;
+                return (
+                  <tr key={o.id} className="border-b border-[#2A2A2A]/50 hover:bg-white/[0.02]">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/dashboard/orders/${o.id}`}
+                          className="font-mono text-xs font-semibold text-[#00BFA6] hover:underline"
+                        >
+                          {o.order_number}
+                        </Link>
+                        {hasDiscount && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400"
+                            title={`Saved ${formatEGP(orderDiscount)} from campaign discount`}
+                          >
+                            <Tag className="h-2.5 w-2.5" />
+                            Campaign
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusBadge tone={typeTone[o.order_type] ?? "muted"} label={typeLabel[o.order_type] ?? o.order_type} />
+                    </td>
+                    <td className="px-5 py-3 text-white/60">
+                      {new Date(o.submitted_at).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-5 py-3 text-white/60">
+                      {o.order_lines?.length ?? 0} line{(o.order_lines?.length ?? 0) !== 1 ? "s" : ""}
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusBadge tone={statusTone(o.status)} label={statusLabel(o.status)} />
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="font-semibold text-white">{formatEGP(o.total_amount)}</span>
+                        {hasDiscount && (
+                          <span className="text-[10px] text-emerald-400">Saved {formatEGP(orderDiscount)}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Link href={`/dashboard/orders/${o.id}`}>
+                        <ChevronRight className="h-4 w-4 text-white/20" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
               {orders.length === 0 && !loading && (
                 <tr>
                   <td colSpan={7} className="px-5 py-16 text-center text-white/30">

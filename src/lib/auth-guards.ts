@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "./supabase/server";
 
 /**
- * Guard for admin-only API routes. Returns null if the request is
- * authorized, or a NextResponse with the appropriate error status otherwise.
+ * Resolve the authenticated admin user, or return a NextResponse error.
  *
- * Allows: real Supabase admins (user_metadata.role === "admin" | "super_admin")
- *         and the demo-admin cookie used in local development.
+ * This is the canonical admin authorization primitive. Routes that need the
+ * admin's identity (e.g. to stamp `reviewed_by` / `approved_by` from the
+ * SESSION rather than a spoofable request body) should use this directly.
+ *
+ * Allows ONLY real Supabase admins (user_metadata.role === "admin" |
+ * "super_admin"). There is intentionally no demo/bypass path — identity is
+ * always derived from the verified Supabase session.
  */
-export async function requireAdmin(): Promise<NextResponse | null> {
+export async function getAdminUser(): Promise<User | NextResponse> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -29,7 +34,19 @@ export async function requireAdmin(): Promise<NextResponse | null> {
     );
   }
 
-  return null;
+  return user;
+}
+
+/**
+ * Guard for admin-only API routes. Returns null if the request is
+ * authorized, or a NextResponse with the appropriate error status otherwise.
+ *
+ * Allows ONLY real Supabase admins (user_metadata.role === "admin" |
+ * "super_admin"). No demo/bypass path.
+ */
+export async function requireAdmin(): Promise<NextResponse | null> {
+  const result = await getAdminUser();
+  return result instanceof NextResponse ? result : null;
 }
 
 /**
@@ -115,4 +132,96 @@ export async function requireDealerOwnership(
   }
 
   return null;
+}
+
+/**
+ * Resolve how the current session should be scoped for dealer-owned
+ * collections (invoices, back-orders, orders).
+ *
+ * - admin / super_admin → { isAdmin: true, scope: null }   (sees everything)
+ * - dealer / sub_dealer → { isAdmin: false, scope: [uuid, code] }
+ *
+ * The scope contains BOTH the dealer's UUID and code because different tables
+ * persist `dealer_id` differently (orders/back_orders/invoices store the
+ * CODE, while some helpers use the UUID). Filtering with `.in("dealer_id",
+ * scope)` is robust to either convention.
+ *
+ * Returns a NextResponse error for unauthenticated or unknown-role callers.
+ */
+export async function resolveDealerScope(): Promise<
+  { isAdmin: boolean; scope: string[] | null } | NextResponse
+> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHENTICATED", message: "Sign in required" } },
+      { status: 401 }
+    );
+  }
+
+  const role = user.user_metadata?.role;
+  if (role === "admin" || role === "super_admin") {
+    return { isAdmin: true, scope: null };
+  }
+  if (role !== "dealer" && role !== "sub_dealer") {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Access denied" } },
+      { status: 403 }
+    );
+  }
+
+  const { data: dealer } = await supabase
+    .from("dealers")
+    .select("id, code")
+    .eq("supabase_uid", user.id)
+    .maybeSingle();
+
+  if (!dealer) {
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Dealer profile not found" } },
+      { status: 404 }
+    );
+  }
+
+  const scope = [dealer.id, dealer.code].filter(
+    (v): v is string => typeof v === "string" && v.length > 0
+  );
+  return { isAdmin: false, scope };
+}
+
+/**
+ * Best-effort dealer lookup for routes that should still respond when the
+ * caller is anonymous or an admin (e.g. catalog browsing). Returns the
+ * authenticated dealer's UUID when one exists, otherwise null.
+ *
+ * Unlike `requireDealerSession`, this NEVER produces a NextResponse —
+ * callers use the null return to skip dealer-scoped enrichment (such as
+ * campaign discounts) without breaking the request.
+ */
+export async function resolveOptionalDealerId(): Promise<string | null> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const role = user.user_metadata?.role;
+    if (role !== "dealer" && role !== "sub_dealer") return null;
+    const { data: dealer } = await supabase
+      .from("dealers")
+      .select("id")
+      .eq("supabase_uid", user.id)
+      .maybeSingle();
+    return dealer?.id ?? null;
+  } catch (err) {
+    console.error(
+      "[resolveOptionalDealerId] unexpected error, falling back to no-discount path:",
+      err,
+    );
+    return null;
+  }
 }

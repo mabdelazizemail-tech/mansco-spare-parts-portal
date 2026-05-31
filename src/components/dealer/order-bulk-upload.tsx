@@ -26,6 +26,11 @@ type EnrichedRow = ValidatedOrderRow & {
   lookupError?: string;
   partName?: string;
   unitPrice?: number | null;
+  // ── Discount snapshot from lookup ──
+  campaignId?: string | null;
+  discountPct?: number;
+  originalUnitPrice?: number | null;
+  discountedUnitPrice?: number | null;
   availabilityLabel?: string;
   cartSnapshot?: CartPartSnapshot;
 };
@@ -131,6 +136,10 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
         replenishment_eta: result.replenishment_eta,
         unit_price: result.unit_price,
         currency: result.currency ?? "EGP",
+        campaign_id: result.campaign_id ?? null,
+        discount_pct: result.discount_pct ?? 0,
+        original_unit_price: result.original_unit_price ?? null,
+        discounted_unit_price: result.discounted_unit_price ?? null,
       };
 
       return {
@@ -138,6 +147,10 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
         lookupStatus: "valid" as const,
         partName: result.name,
         unitPrice: result.unit_price,
+        campaignId: result.campaign_id ?? null,
+        discountPct: result.discount_pct ?? 0,
+        originalUnitPrice: result.original_unit_price ?? null,
+        discountedUnitPrice: result.discounted_unit_price ?? null,
         availabilityLabel: result.availability_label_en,
         cartSnapshot: snapshot,
       };
@@ -153,7 +166,7 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
     setEditingRowIndex(null);
     setAddedCount(null);
 
-    const parseResult = await parseCSVFile(file);
+    const parseResult = await parseCSVFile(file, ["Part Number", "Quantity"]);
     if (parseResult.errors.length > 0) {
       setFileError(parseResult.errors.join("; "));
       e.target.value = "";
@@ -237,7 +250,11 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
   const allValid = rows.length > 0 && issueCount === 0;
   const subtotal = rows
     .filter((r) => r.lookupStatus === "valid")
-    .reduce((s, r) => s + (r.unitPrice ?? 0) * Number(r.data["Quantity"] || 0), 0);
+    .reduce(
+      (s, r) =>
+        s + (r.discountedUnitPrice ?? r.unitPrice ?? 0) * Number(r.data["Quantity"] || 0),
+      0,
+    );
 
   const hiddenFileInput = (
     <input
@@ -284,9 +301,17 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
       <>
         {hiddenFileInput}
         <div className="space-y-3">
-          <p className="text-sm text-white/60">
-            Save time by uploading a <strong>CSV</strong> or <strong>Excel (.xlsx)</strong> file with the parts you want. Two columns: <code className="text-[#00BFA6]">Part Number</code> and <code className="text-[#00BFA6]">Quantity</code>.
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-white/60">
+              Save time by uploading a <strong>CSV</strong> or <strong>Excel (.xlsx)</strong> file with the parts you want to order.
+            </p>
+            <p className="text-xs text-white/40">
+              <strong>Required columns:</strong> <code className="text-[#00BFA6]">Part Number</code> (exact catalog number) and <code className="text-[#00BFA6]">Quantity</code> (whole number).
+            </p>
+            <p className="text-xs text-white/40">
+              ✓ Part names, prices, and availability are automatically looked up from the catalog.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleDownloadTemplate}
@@ -375,7 +400,8 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
               <tbody>
                 {rows.map((row, idx) => {
                   const qty = Number(row.data["Quantity"]) || 0;
-                  const lineTotal = (row.unitPrice ?? 0) * qty;
+                  const effectiveUnit = row.discountedUnitPrice ?? row.unitPrice ?? 0;
+                  const lineTotal = effectiveUnit * qty;
                   return (
                     <Fragment key={`${row.index}-${row.data["Part Number"]}`}>
                       <tr className={`border-b border-[#2A2A2A] ${row.lookupStatus === "valid" ? "bg-green-500/5" : "bg-amber-500/5"}`}>
@@ -407,9 +433,25 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
                           )}
                         </td>
                         <td className="px-3 py-3 text-xs text-white">
-                          {row.lookupStatus === "valid" && row.unitPrice !== undefined
-                            ? formatEGP(row.unitPrice ?? 0)
-                            : "—"}
+                          {row.lookupStatus === "valid" && row.unitPrice !== undefined ? (
+                            row.campaignId && row.discountedUnitPrice !== null && row.discountedUnitPrice !== undefined ? (
+                              <span className="flex flex-col">
+                                <span className="text-white/40 line-through text-[10px]">
+                                  {formatEGP(row.originalUnitPrice ?? row.unitPrice ?? 0)}
+                                </span>
+                                <span className="text-emerald-400 font-semibold">
+                                  {formatEGP(row.discountedUnitPrice)}
+                                </span>
+                                <span className="text-[10px] text-emerald-400/70">
+                                  Campaign −{row.discountPct}%
+                                </span>
+                              </span>
+                            ) : (
+                              formatEGP(row.unitPrice ?? 0)
+                            )
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="px-3 py-3 text-xs text-white font-semibold">
                           {row.lookupStatus === "valid" ? formatEGP(lineTotal) : "—"}

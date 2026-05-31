@@ -47,7 +47,7 @@ export default function PartsBulkUpload({ onComplete }: PartsBulkUploadProps) {
     setSubmitResult(null);
     setSubmitError("");
 
-    const parseResult = await parseCSVFile(file);
+    const parseResult = await parseCSVFile(file, ["Part Number", "Name (EN)"]);
     if (parseResult.errors.length > 0) {
       setFileError(parseResult.errors.join("; "));
       e.target.value = "";

@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { dealerRegistrationSchema } from "@/lib/validators/registration";
 
+// Upload constraints for registration documents (audit item 10).
+const MAX_DOC_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_DOC_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
 export async function POST(req: NextRequest) {
+  // TODO(security/item-6): apply checkRateLimit() keyed by client IP + email
+  // once a durable rate-limit store is provisioned (see src/lib/rate-limit.ts).
   try {
     const formData = await req.formData();
 
@@ -102,10 +113,33 @@ export async function POST(req: NextRequest) {
     for (const docField of ["trade_license", "tax_card", "commercial_register_doc"]) {
       const file = formData.get(docField) as File | null;
       if (file && file.size > 0) {
+        // Validate type and size before persisting (audit item 10).
+        if (!ALLOWED_DOC_MIME.has(file.type)) {
+          return NextResponse.json(
+            {
+              error: {
+                code: "INVALID_FILE_TYPE",
+                message: `${docField}: only PDF, JPG, PNG, or WEBP files are allowed`,
+              },
+            },
+            { status: 400 }
+          );
+        }
+        if (file.size > MAX_DOC_BYTES) {
+          return NextResponse.json(
+            {
+              error: {
+                code: "FILE_TOO_LARGE",
+                message: `${docField}: file exceeds the 10 MB limit`,
+              },
+            },
+            { status: 400 }
+          );
+        }
         const filePath = `registrations/${userId}/${docField}_${Date.now()}`;
         const { error: uploadError } = await supabaseAdmin.storage
           .from("dealer-documents")
-          .upload(filePath, file);
+          .upload(filePath, file, { contentType: file.type, upsert: false });
         if (!uploadError) documentUrls[docField] = filePath;
       }
     }

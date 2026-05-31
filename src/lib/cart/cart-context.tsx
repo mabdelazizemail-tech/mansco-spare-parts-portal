@@ -15,6 +15,8 @@ import {
   cartLineCount,
   cartTotalQty,
   cartSubtotal,
+  cartTotalDiscount,
+  cartSubtotalAfterDiscount,
   cartVat,
   cartTotal,
   cartIsEmpty,
@@ -43,6 +45,8 @@ interface CartContextValue {
   lineCount: number;
   totalQty: number;
   subtotal: number;
+  totalDiscount: number;
+  subtotalAfterDiscount: number;
   vat: number;
   total: number;
   isEmpty: boolean;
@@ -110,6 +114,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     lineCount: cartLineCount(state),
     totalQty: cartTotalQty(state),
     subtotal: cartSubtotal(state),
+    totalDiscount: cartTotalDiscount(state),
+    subtotalAfterDiscount: cartSubtotalAfterDiscount(state),
     vat: cartVat(state),
     total: cartTotal(state),
     isEmpty: cartIsEmpty(state),

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin, getAdminUser } from "@/lib/auth-guards";
 
-// GET /api/campaigns/[id] – get single campaign with items
+// GET /api/campaigns/[id] – get single campaign with items (admin only)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
   const { id } = await params;
   try {
     const { data: campaign, error } = await supabaseAdmin
@@ -52,6 +55,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   try {
     const body = await req.json();
@@ -103,6 +108,7 @@ export async function PUT(
       campaign_id: id,
       action: "edited",
       details: { fields_updated: Object.keys(allowedFields).filter((k) => k !== "updated_at") },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data });
@@ -119,6 +125,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
   const { id } = await params;
   try {
     // Only allow deleting draft campaigns

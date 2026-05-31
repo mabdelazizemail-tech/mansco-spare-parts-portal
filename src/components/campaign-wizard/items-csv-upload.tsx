@@ -69,7 +69,12 @@ export default function ItemsCSVUpload({
     setValidatedRows([]);
     setEditingRowIndex(null);
 
-    const parseResult = await parseCSVFile(file);
+    const parseResult = await parseCSVFile(file, [
+      "Part Number",
+      "Description",
+      "Discount Value",
+      "Min Order Quantity",
+    ]);
     if (parseResult.errors.length > 0) {
       setFileError(parseResult.errors.join("; "));
       // Reset the input so re-selecting the same file fires onChange again

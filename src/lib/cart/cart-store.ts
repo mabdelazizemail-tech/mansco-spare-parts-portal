@@ -21,6 +21,11 @@ export type CartPartSnapshot = {
   replenishment_eta: string | null;
   unit_price: number;
   currency: string;
+  // ── Optional discount fields (populated by lookup APIs) ──
+  campaign_id?: string | null;
+  discount_pct?: number;
+  original_unit_price?: number | null;
+  discounted_unit_price?: number | null;
 };
 
 export type CartLine = {
@@ -160,15 +165,28 @@ export function cartTotalQty(state: CartState): number {
 }
 
 export function cartSubtotal(state: CartState): number {
+  // ORIGINAL subtotal (sum of unit_price * qty, ignoring discount).
   return state.lines.reduce((sum, l) => sum + l.part.unit_price * l.qty, 0);
 }
 
+export function cartTotalDiscount(state: CartState): number {
+  return state.lines.reduce((sum, l) => {
+    const orig = l.part.original_unit_price ?? l.part.unit_price;
+    const disc = l.part.discounted_unit_price ?? l.part.unit_price;
+    return sum + Math.max(0, orig - disc) * l.qty;
+  }, 0);
+}
+
+export function cartSubtotalAfterDiscount(state: CartState): number {
+  return cartSubtotal(state) - cartTotalDiscount(state);
+}
+
 export function cartVat(state: CartState, rate = 0.14): number {
-  return Math.round(cartSubtotal(state) * rate);
+  return Math.round(cartSubtotalAfterDiscount(state) * rate);
 }
 
 export function cartTotal(state: CartState, vatRate = 0.14): number {
-  return cartSubtotal(state) + cartVat(state, vatRate);
+  return cartSubtotalAfterDiscount(state) + cartVat(state, vatRate);
 }
 
 export function cartIsEmpty(state: CartState): boolean {

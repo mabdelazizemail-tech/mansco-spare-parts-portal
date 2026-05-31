@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminUser } from "@/lib/auth-guards";
 
 type RouteParams = { params: Promise<{ id: string; itemId: string }> };
 
-// PUT /api/campaigns/[id]/items/[itemId] – update a single campaign item
+// PUT /api/campaigns/[id]/items/[itemId] – update a single campaign item (admin only)
 export async function PUT(req: NextRequest, { params }: RouteParams) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id, itemId } = await params;
   try {
     const body = await req.json();
@@ -89,6 +92,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         part_number: before.part_number,
         changes: diff,
       },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data });
@@ -102,6 +106,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/campaigns/[id]/items/[itemId] – remove a single campaign item
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id, itemId } = await params;
   try {
     const { data: item } = await supabaseAdmin
@@ -135,6 +141,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
       campaign_id: id,
       action: "item_removed",
       details: { item_id: itemId, part_number: item.part_number },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data: { deleted: true } });

@@ -20,12 +20,6 @@ export default function LoginPage() {
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
-    if (email === "admin" && password === "admin") {
-      document.cookie = "demo-admin=true; path=/; max-age=86400; SameSite=Lax";
-      window.location.href = "/dashboard/admin";
-      return;
-    }
-
     const supabase = createClient();
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,

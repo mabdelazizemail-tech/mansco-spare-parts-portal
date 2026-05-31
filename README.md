@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MANSCO Spare Parts Portal
 
-## Getting Started
+A centralized web portal for MANSCO / Peugeot Egypt dealers and sub-dealers to
+manage the spare-parts lifecycle: inquiries, order placement, order tracking,
+financial follow-up, and reporting. It integrates with SAP **offline** via
+batch CSV exchange (SAP is the source of truth for inventory, pricing, rules).
 
-First, run the development server:
+> Architectural detail, data model, and business rules live in [`CLAUDE.md`](./CLAUDE.md).
+> Security model, threat notes, and the hardening runbook live in [`SECURITY.md`](./SECURITY.md).
+
+## Tech stack
+
+| Layer | Choice |
+|-------|--------|
+| Framework | Next.js 16 (App Router) + TypeScript + React 19 |
+| UI | Tailwind CSS v4 + shadcn/ui |
+| Auth & identity | Supabase Auth (RBAC via `user_metadata.role`) |
+| Data access (runtime) | Supabase JS client against Postgres |
+| Schema / migrations | Prisma schema (source of truth) + SQL migrations in `supabase/migrations` |
+| Storage | Supabase Storage (dealer documents, CSV, invoices) |
+| CSV/Excel | papaparse + SheetJS (xlsx) |
+| Testing | Vitest (unit/integration) + Playwright (E2E) |
+
+> Note on the data layer: API routes currently use the Supabase client
+> (`supabaseAdmin`) directly — there is no Prisma runtime client. The Prisma
+> schema is retained for documentation and drift-checking. See `SECURITY.md`
+> and `CLAUDE.md` for the open architectural decision.
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# 1. Install
+npm install
+
+# 2. Configure environment
+cp .env.example .env.local      # fill in Supabase credentials
+
+# 3. Run the dev server
+npm run dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build (type + lint errors fail the build) |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Vitest unit + integration suite |
+| `npm run test:coverage` | Coverage report |
+| `npm run test:e2e:playwright` | Playwright E2E |
+| `npm run prisma:validate` | Validate the Prisma schema |
+| `npm run prisma:drift` | Fail if the schema and the live DB have drifted (needs `DATABASE_URL`) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project structure
 
-## Learn More
+```
+src/
+├── app/                 # App Router pages + API route handlers
+│   ├── api/             # Route handlers (all self-guard with auth-guards)
+│   └── dashboard/       # Dealer + admin portal pages
+├── components/          # UI + feature components
+├── lib/
+│   ├── auth-guards.ts   # requireAdmin / getAdminUser / requireDealerSession
+│   ├── api-errors.ts    # Generic-in-prod error responses
+│   ├── rate-limit.ts    # Rate-limit stub (not yet enforced — see SECURITY.md)
+│   ├── rules/           # Business rule checks (availability, financial, ...)
+│   ├── sync/            # SAP CSV import
+│   └── supabase/        # Browser / server / service-role clients
+└── middleware.ts        # Edge auth gate + route guards
+supabase/migrations/     # SQL migrations (incl. RLS)
+prisma/schema.prisma     # Schema source of truth
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Security
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Authorization is enforced in two layers:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Middleware** (`src/middleware.ts`) — gates page/route access by session and
+   role. Public routes are matched **exactly** (no sub-path wildcarding).
+2. **Per-route guards** (`src/lib/auth-guards.ts`) — every `/api/*` handler
+   calls `requireAdmin()` / `getAdminUser()` / `requireDealerSession()`.
+   Identity for audit fields is taken from the **session**, never the request body.
 
-## Deploy on Vercel
+Defense-in-depth RLS policies are in `supabase/migrations/20260531_001_enable_rls.sql`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See [`SECURITY.md`](./SECURITY.md) for the full model, known gaps, and runbook.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+Targets Vercel (Next.js App Router). CI (`.github/workflows/ci.yml`) runs lint,
+typecheck, tests, build, and `npm audit` on every PR.
+```

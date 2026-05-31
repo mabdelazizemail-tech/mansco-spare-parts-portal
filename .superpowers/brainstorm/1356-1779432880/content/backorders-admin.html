@@ -1,0 +1,162 @@
+<h2>Back-Orders & Admin Fulfillment Dashboard</h2>
+<p class="subtitle">Two views to design: the dealer backorder page and the admin fulfillment dashboard.</p>
+
+<h3 style="margin-top:2rem;">Dealer Back-Orders Page</h3>
+<p class="subtitle">The enhanced /dashboard/backorders view with real data + ETA tracking</p>
+
+<div class="cards">
+  <div class="card" data-choice="bo-a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;">
+      <div style="background:#111;border-radius:8px;padding:1rem;font-family:monospace;font-size:11px;color:#ccc;">
+        <!-- Summary cards -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:8px;text-align:center;">
+            <div style="color:#555;font-size:8px;">TOTAL ITEMS</div>
+            <div style="color:#fff;font-size:16px;font-weight:bold;">12</div>
+          </div>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:8px;text-align:center;">
+            <div style="color:#555;font-size:8px;">AWAITING</div>
+            <div style="color:#f59e0b;font-size:16px;font-weight:bold;">7</div>
+          </div>
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:8px;text-align:center;">
+            <div style="color:#555;font-size:8px;">IN TRANSIT</div>
+            <div style="color:#3b82f6;font-size:16px;font-weight:bold;">3</div>
+          </div>
+          <div style="background:#1a1a1a;border:1px solid #ef4444;border-radius:6px;padding:8px;text-align:center;">
+            <div style="color:#555;font-size:8px;">⚠ AT RISK</div>
+            <div style="color:#ef4444;font-size:16px;font-weight:bold;">2</div>
+          </div>
+        </div>
+        <!-- Table -->
+        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;">
+          <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr 0.5fr 0.8fr 0.8fr 0.6fr 0.6fr;padding:6px 10px;color:#555;font-size:8px;border-bottom:1px solid #2a2a2a;">
+            <span>ORDER</span><span>PART</span><span>PART NAME</span><span>QTY</span><span>ORIGINAL ETA</span><span>CURRENT ETA</span><span>SLIP</span><span>STATUS</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr 0.5fr 0.8fr 0.8fr 0.6fr 0.6fr;padding:7px 10px;border-bottom:1px solid #1f1f1f;font-size:9px;background:#ef444410;border-left:3px solid #ef4444;">
+            <span style="color:#00BFA6;">ORD-0160</span><span style="color:#888;">PSA-7104.GG</span><span style="color:#fff;">Front Bumper</span><span style="color:#fff;">4</span><span style="color:#888;">05 Jun</span><span style="color:#ef4444;font-weight:bold;">20 Jun</span><span style="color:#ef4444;">+15d ⚠</span><span style="color:#f59e0b;">● Await</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr 0.5fr 0.8fr 0.8fr 0.6fr 0.6fr;padding:7px 10px;border-bottom:1px solid #1f1f1f;font-size:9px;">
+            <span style="color:#00BFA6;">ORD-0160</span><span style="color:#888;">PSA-5983.F5</span><span style="color:#fff;">Rear Bumper</span><span style="color:#fff;">2</span><span style="color:#888;">10 Jun</span><span style="color:#fff;">12 Jun</span><span style="color:#888;">+2d</span><span style="color:#f59e0b;">● Await</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr 0.5fr 0.8fr 0.8fr 0.6fr 0.6fr;padding:7px 10px;border-bottom:1px solid #1f1f1f;font-size:9px;">
+            <span style="color:#00BFA6;">ORD-0155</span><span style="color:#888;">PSA-1330.Q1</span><span style="color:#fff;">CV Joint</span><span style="color:#fff;">6</span><span style="color:#888;">08 Jun</span><span style="color:#3b82f6;font-weight:bold;">08 Jun</span><span style="color:#22c55e;">0d</span><span style="color:#3b82f6;">● Transit</span>
+          </div>
+        </div>
+        <!-- ETA change detail (expandable row concept) -->
+        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:10px;margin-top:8px;">
+          <div style="color:#555;font-size:8px;margin-bottom:4px;">ETA HISTORY — PSA-7104.GG (Front Bumper)</div>
+          <div style="border-left:2px solid #2a2a2a;margin-left:4px;padding-left:10px;font-size:9px;">
+            <div style="padding:3px 0;"><span style="color:#ef4444;">20 Jun</span> <span style="color:#555;">← SAP sync, 19 May</span></div>
+            <div style="padding:3px 0;"><span style="color:#f59e0b;">12 Jun</span> <span style="color:#555;">← SAP sync, 15 May</span></div>
+            <div style="padding:3px 0;"><span style="color:#22c55e;">05 Jun</span> <span style="color:#555;">← Original, 17 May</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Table with Risk Highlighting + Expandable ETA History</h3>
+      <p>Summary cards showing counts by status + at-risk count. Table with slippage column — at-risk rows get red left border and highlighted background. Clicking a row expands to show the full ETA change history timeline. Clear visual urgency for delayed items.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="bo-b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;">
+      <div style="background:#111;border-radius:8px;padding:1rem;font-family:monospace;font-size:11px;color:#ccc;">
+        <!-- Grouped by order -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <!-- Order group card -->
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;">
+            <div style="padding:10px 12px;border-bottom:1px solid #2a2a2a;display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <span style="color:#00BFA6;font-weight:bold;">ORD-2026-0160</span>
+                <span style="color:#555;margin-left:6px;font-size:8px;">Stock Order · 17 May 2026</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <span style="background:#22c55e33;color:#22c55e;padding:2px 8px;border-radius:10px;font-size:8px;">2 confirmed</span>
+                <span style="background:#f59e0b33;color:#f59e0b;padding:2px 8px;border-radius:10px;font-size:8px;">2 backordered</span>
+              </div>
+            </div>
+            <!-- Backorder items -->
+            <div style="padding:8px 12px;">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222;">
+                <div>
+                  <div style="color:#fff;font-size:10px;">Front Bumper <span style="color:#555;font-size:8px;">PSA-7104.GG</span></div>
+                  <div style="color:#555;font-size:8px;">Qty: 4 · Original ETA: 05 Jun</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#ef4444;font-size:11px;font-weight:bold;">20 Jun <span style="font-size:8px;font-weight:normal;">⚠ +15d</span></div>
+                  <div style="color:#555;font-size:8px;">3 ETA changes</div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0;">
+                <div>
+                  <div style="color:#fff;font-size:10px;">Rear Bumper <span style="color:#555;font-size:8px;">PSA-5983.F5</span></div>
+                  <div style="color:#555;font-size:8px;">Qty: 2 · Original ETA: 10 Jun</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#fff;font-size:11px;font-weight:bold;">12 Jun <span style="color:#888;font-size:8px;">+2d</span></div>
+                  <div style="color:#555;font-size:8px;">1 ETA change</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Second order group -->
+          <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;">
+            <div style="padding:10px 12px;border-bottom:1px solid #2a2a2a;display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <span style="color:#00BFA6;font-weight:bold;">ORD-2026-0155</span>
+                <span style="color:#555;margin-left:6px;font-size:8px;">Air/DHL Order · 15 May 2026</span>
+              </div>
+              <div>
+                <span style="background:#3b82f633;color:#3b82f6;padding:2px 8px;border-radius:10px;font-size:8px;">1 in transit</span>
+              </div>
+            </div>
+            <div style="padding:8px 12px;">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;">
+                <div>
+                  <div style="color:#fff;font-size:10px;">CV Joint <span style="color:#555;font-size:8px;">PSA-1330.Q1</span></div>
+                  <div style="color:#555;font-size:8px;">Qty: 6 · On schedule</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#3b82f6;font-size:11px;font-weight:bold;">08 Jun</div>
+                  <div style="color:#22c55e;font-size:8px;">On track ✓</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Grouped by Order Cards</h3>
+      <p>Backorder items grouped under their parent order as expandable cards. Each card header shows the order number, type, and badge counts (confirmed vs backordered). Items within show part info, current ETA, and slippage. More contextual — the dealer sees backorders in the context of the full order. Less dense than a flat table.</p>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:2.5rem;">Admin Fulfillment Dashboard</h3>
+<p class="subtitle">The admin view for monitoring fulfillment across all dealers</p>
+
+<div class="options">
+  <div class="option" data-choice="admin-a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Metrics + Action Queues</h3>
+      <p>Top row: KPI cards (total shipments in transit, invoices overdue, backorders at risk, avg fulfillment time). Below: three tabbed queues — "At-Risk Backorders" (ETA slipped past threshold), "Overdue Invoices" (past due, sorted by aging), "Pending Shipments" (ready to dispatch). Each queue is actionable — admin can click to update ETA, send reminders, or update status. Plus a "View as Dealer" button for impersonation.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="admin-b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Three-Column Dashboard</h3>
+      <p>Three equal columns side by side: Shipments (active, by carrier, status breakdown), Invoices (aging chart, overdue list), Backorders (at-risk list, ETA slippage heatmap). Each column is a self-contained mini-dashboard. Dealer search bar at the top for impersonation. Good for monitoring at a glance, but less focused on action.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="admin-c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Alerts-First Feed</h3>
+      <p>A prioritized feed of fulfillment events and alerts. Top: critical alerts (backorders past threshold, large overdue invoices, failed deliveries). Middle: recent activity feed (new shipments, ETA changes, payments received). Bottom: summary charts. Think of it as a fulfillment "inbox" — the most urgent items float to the top. Impersonation via dealer search. Best for admins who need to react to issues rather than browse data.</p>
+    </div>
+  </div>
+</div>

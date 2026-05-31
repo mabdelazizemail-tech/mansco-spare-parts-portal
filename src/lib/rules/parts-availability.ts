@@ -12,6 +12,12 @@
  *     callers (API, UI, exporters) cannot accidentally leak pricing.
  */
 
+import {
+  pickWinningRule,
+  applyDiscount,
+  type CampaignItemRow,
+} from "@/lib/rules/campaign-discount";
+
 export type AvailabilityState =
   | "AVAILABLE"
   | "PARTIALLY_AVAILABLE"
@@ -35,6 +41,80 @@ export type PriceSnapshot = {
   currency: string;
   price_list_id?: string | null;
 };
+
+/**
+ * Price-list tag written by the admin bulk-upload route
+ * (`/api/parts/bulk-upload`). Kept here so the writer and every reader share
+ * one source of truth for the literal.
+ */
+export const ADMIN_MANUAL_PRICE_LIST_ID = "ADMIN_MANUAL";
+
+/**
+ * Display precedence when a part has prices under more than one price-list tag.
+ * Earlier = higher priority. Tags not listed here (and null/unknown tags) rank
+ * below every listed tag.
+ *
+ * ⚠️ Business decision: ADMIN_MANUAL (manual admin entry) wins over STANDARD
+ *    (SAP-synced). To make SAP authoritative instead, swap the two entries.
+ */
+export const PRICE_LIST_PRECEDENCE: readonly string[] = [
+  ADMIN_MANUAL_PRICE_LIST_ID,
+  "STANDARD",
+];
+
+function priceRank(price_list_id: string | null | undefined): number {
+  const idx = PRICE_LIST_PRECEDENCE.indexOf(price_list_id ?? "");
+  // Unknown / null tags sort after every known tag, but stay deterministic.
+  return idx === -1 ? PRICE_LIST_PRECEDENCE.length : idx;
+}
+
+/**
+ * Choose the single winning price for ONE part from its candidate rows,
+ * applying {@link PRICE_LIST_PRECEDENCE}. Stable: on equal rank the first
+ * row seen wins. Returns null for empty/nullish input.
+ *
+ * Use this everywhere a part may now carry multiple `price_list_items` rows
+ * (e.g. a SAP `STANDARD` row plus an `ADMIN_MANUAL` row) so every screen
+ * resolves to the same price deterministically.
+ */
+export function pickPrice(
+  candidates: PriceSnapshot[] | null | undefined
+): PriceSnapshot | null {
+  if (!candidates || candidates.length === 0) return null;
+  let best: PriceSnapshot | null = null;
+  let bestRank = Number.POSITIVE_INFINITY;
+  for (const c of candidates) {
+    const rank = priceRank(c.price_list_id);
+    if (rank < bestRank) {
+      best = c;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
+/**
+ * Group flat `price_list_items` rows by `part_number` and resolve each part to
+ * its winning price via {@link pickPrice}. Replaces the old
+ * `new Map(rows.map(r => [r.part_number, r]))` pattern, which was last-row-wins
+ * and therefore non-deterministic once a part had more than one tag.
+ */
+export function buildPriceMap(
+  rows: PriceSnapshot[] | null | undefined
+): Map<string, PriceSnapshot> {
+  const grouped = new Map<string, PriceSnapshot[]>();
+  for (const r of rows ?? []) {
+    const arr = grouped.get(r.part_number);
+    if (arr) arr.push(r);
+    else grouped.set(r.part_number, [r]);
+  }
+  const out = new Map<string, PriceSnapshot>();
+  for (const [partNumber, arr] of grouped) {
+    const winner = pickPrice(arr);
+    if (winner) out.set(partNumber, winner);
+  }
+  return out;
+}
 
 /**
  * Resolve the availability state for a part, given a stock snapshot and
@@ -125,6 +205,13 @@ export type PartSearchResult = {
   // Price is only present when displayable per the no-price rule.
   unit_price: number | null;
   currency: string | null;
+  // ── Discount fields (null when no displayable price or no eligible campaign) ──
+  campaign_id: string | null;
+  /** 0 when no discount applies. Use `original_unit_price !== null` as the canonical "has discount" discriminant. */
+  discount_pct: number;
+  original_unit_price: number | null;
+  discounted_unit_price: number | null;
+  // ── (unchanged) ──
   // Always include lookup metadata so the UI can warn about stale data.
   stock_last_synced_at: string | null;
 };
@@ -148,9 +235,29 @@ export function buildPartSearchResult(input: {
   stock: StockSnapshot | null | undefined;
   price: PriceSnapshot | null | undefined;
   requestedQty?: number;
+  /** Eligible campaign_items rows for this part. The builder picks the winner. */
+  discountCandidates?: CampaignItemRow[] | null;
 }): PartSearchResult {
   const state = resolveAvailabilityState(input.stock, input.requestedQty ?? 1);
   const displayable = getDisplayablePrice(state, input.price);
+
+  // No-price rule wins: if price is withheld, withhold the discount too.
+  let campaign_id: string | null = null;
+  let discount_pct = 0;
+  let original_unit_price: number | null = null;
+  let discounted_unit_price: number | null = null;
+
+  if (displayable) {
+    const rule = pickWinningRule(input.discountCandidates, displayable.unit_price);
+    const applied = applyDiscount(displayable.unit_price, rule);
+    if (rule && applied) {
+      campaign_id = rule.campaignId;
+      discount_pct = applied.discountPct;
+      original_unit_price = displayable.unit_price;
+      discounted_unit_price = applied.discountedUnitPrice;
+    }
+  }
+
   return {
     part_number: input.catalog.partNumber,
     name: input.catalog.name,
@@ -167,6 +274,10 @@ export function buildPartSearchResult(input: {
     replenishment_eta: input.stock?.replenishment_eta ?? null,
     unit_price: displayable?.unit_price ?? null,
     currency: displayable?.currency ?? null,
+    campaign_id,
+    discount_pct,
+    original_unit_price,
+    discounted_unit_price,
     stock_last_synced_at: input.stock?.last_synced_at ?? null,
   };
 }

@@ -554,11 +554,16 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
             setDealer(mappedDealer);
 
-            // Fetch orders for this dealer
+            // Fetch orders for this dealer. orders.dealer_id stores the dealer
+            // CODE (see POST /api/orders), but older rows may carry the UUID —
+            // match either so the dashboard never silently shows zero orders.
+            const dealerKeys = [dealerData.id, dealerData.code].filter(
+              (v: string | null): v is string => typeof v === "string" && v.length > 0
+            );
             const { data: ordersData, error: ordersError } = await supabase
               .from("orders")
               .select("*")
-              .eq("dealer_id", dealerData.id)
+              .in("dealer_id", dealerKeys)
               .order("created_at", { ascending: false });
 
             if (!ordersError && ordersData) {
@@ -710,7 +715,20 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const used = orders.filter((o) => o.status !== "rejected").reduce((s, o) => s + o.totalAmount, 0);
+    const nonRejected = orders.filter((o) => o.status !== "rejected");
+    const used = nonRejected.reduce((s, o) => s + o.totalAmount, 0);
+
+    // Month-to-date achieved revenue (real). There is no dealer_targets source
+    // yet, so targetPercent stays 0 — the dashboard renders MTD revenue without
+    // a target percentage rather than a fabricated figure.
+    const now = new Date();
+    const monthlyRevenue = nonRejected
+      .filter((o) => {
+        const d = new Date(o.submittedAt);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .reduce((s, o) => s + o.totalAmount, 0);
+
     return {
       totalOrders: orders.length,
       pendingOrders: orders.filter((o) => o.status === "submitted" || o.status === "under_review").length,
@@ -718,8 +736,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       creditUsed: used,
       availableCredit: dealer.creditLimit - used,
       overdueBalance: dealer.overdueBalance ?? 0,
-      targetPercent: 72,
-      monthlyRevenue: used,
+      targetPercent: 0,
+      monthlyRevenue,
     };
   }, [orders, dealer]);
 

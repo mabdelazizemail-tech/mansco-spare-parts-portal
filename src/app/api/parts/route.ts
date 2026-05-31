@@ -3,10 +3,13 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { categories } from "@/lib/catalog";
 import {
   buildPartSearchResult,
+  buildPriceMap,
   type PartSearchResult,
   type StockSnapshot,
   type PriceSnapshot,
 } from "@/lib/rules/parts-availability";
+import { getCampaignDiscounts } from "@/lib/rules/campaign-discount";
+import { resolveOptionalDealerId } from "@/lib/auth-guards";
 
 /**
  * GET /api/parts
@@ -87,11 +90,18 @@ export async function GET(req: NextRequest) {
         .from("price_list_items")
         .select("part_number, unit_price, currency, price_list_id");
       if (priceRows) {
-        priceMap = new Map(priceRows.map((p) => [p.part_number, p as PriceSnapshot]));
+        // A part may now carry multiple tags (e.g. STANDARD + ADMIN_MANUAL);
+        // resolve each to one winning price deterministically.
+        priceMap = buildPriceMap(priceRows as PriceSnapshot[]);
       }
     } catch {
       // price table not seeded yet
     }
+
+    // 3b. Discount candidates — best-effort (no dealer = no discounts)
+    const dealerId = await resolveOptionalDealerId();
+    const partNumbers = catalogRows.map((c) => c.partNumber);
+    const discountMap = await getCampaignDiscounts(dealerId, partNumbers);
 
     // 4. Build search results applying the no-price rule
     let results: PartSearchResult[] = catalogRows.map((part) =>
@@ -99,6 +109,7 @@ export async function GET(req: NextRequest) {
         catalog: part,
         stock: stockMap.get(part.partNumber) ?? null,
         price: priceMap.get(part.partNumber) ?? null,
+        discountCandidates: discountMap.get(part.partNumber) ?? null,
       })
     );
 

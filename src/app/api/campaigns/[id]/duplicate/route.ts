@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminUser } from "@/lib/auth-guards";
 
-// POST /api/campaigns/[id]/duplicate – clone a campaign as draft
+// POST /api/campaigns/[id]/duplicate – clone a campaign as draft (admin only)
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   try {
     // Fetch original
@@ -36,6 +39,7 @@ export async function POST(
         target_dealer_ids: original.target_dealer_ids,
         target_dealer_group: original.target_dealer_group,
         eligibility_rules: original.eligibility_rules,
+        created_by: admin.id,
       })
       .select()
       .single();
@@ -72,6 +76,7 @@ export async function POST(
       campaign_id: clone.id,
       action: "created",
       details: { cloned_from: id, original_name: original.name },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data: clone }, { status: 201 });
