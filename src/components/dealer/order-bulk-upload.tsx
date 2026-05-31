@@ -153,7 +153,7 @@ export default function OrderBulkUpload({ onItemsAdded }: OrderBulkUploadProps) 
     setEditingRowIndex(null);
     setAddedCount(null);
 
-    const parseResult = await parseCSVFile(file);
+    const parseResult = await parseCSVFile(file, ["Part Number", "Quantity"]);
     if (parseResult.errors.length > 0) {
       setFileError(parseResult.errors.join("; "));
       e.target.value = "";

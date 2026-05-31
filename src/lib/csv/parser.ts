@@ -6,13 +6,6 @@ export interface ParseResult {
   errors: string[];
 }
 
-const REQUIRED_COLUMNS = [
-  "Part Number",
-  "Description",
-  "Discount Value",
-  "Min Order Quantity",
-];
-
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
 
 function isCSV(file: File): boolean {
@@ -34,16 +27,19 @@ function normalizeRows(raw: unknown[]): Record<string, string>[] {
   });
 }
 
-function checkColumns(firstRow: Record<string, unknown>): string[] {
+function checkColumns(
+  firstRow: Record<string, unknown>,
+  requiredColumns: string[]
+): string[] {
   const errors: string[] = [];
-  const missingColumns = REQUIRED_COLUMNS.filter((col) => !(col in firstRow));
+  const missingColumns = requiredColumns.filter((col) => !(col in firstRow));
   if (missingColumns.length > 0) {
     errors.push(`Missing required columns: ${missingColumns.join(", ")}`);
   }
   return errors;
 }
 
-async function parseCSV(file: File): Promise<ParseResult> {
+async function parseCSV(file: File, requiredColumns: string[]): Promise<ParseResult> {
   return new Promise((resolve) => {
     Papa.parse(file, {
       header: true,
@@ -60,7 +56,7 @@ async function parseCSV(file: File): Promise<ParseResult> {
         }
 
         const firstRow = results.data[0] as Record<string, unknown>;
-        errors.push(...checkColumns(firstRow));
+        errors.push(...checkColumns(firstRow, requiredColumns));
 
         if (errors.length > 0) {
           resolve({ rows: [], errors });
@@ -76,7 +72,7 @@ async function parseCSV(file: File): Promise<ParseResult> {
   });
 }
 
-async function parseXLSX(file: File): Promise<ParseResult> {
+async function parseXLSX(file: File, requiredColumns: string[]): Promise<ParseResult> {
   try {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
@@ -98,7 +94,7 @@ async function parseXLSX(file: File): Promise<ParseResult> {
     }
 
     const firstRow = data[0];
-    const colErrors = checkColumns(firstRow);
+    const colErrors = checkColumns(firstRow, requiredColumns);
     if (colErrors.length > 0) {
       return { rows: [], errors: colErrors };
     }
@@ -115,10 +111,17 @@ async function parseXLSX(file: File): Promise<ParseResult> {
  *
  * - Detects format by file extension (.csv vs .xlsx/.xls)
  * - Caps file size at 5MB to prevent tab freezes
- * - Validates required columns are present
+ * - Validates the caller-supplied required columns are present
  * - Returns row data normalized to Record<string, string>
+ *
+ * `requiredColumns` MUST be provided by each caller (parts, orders, campaigns
+ * each have different headers). Defaults to no structural column check, leaving
+ * per-field validation to the domain validator.
  */
-export async function parseCSVFile(file: File): Promise<ParseResult> {
+export async function parseCSVFile(
+  file: File,
+  requiredColumns: string[] = []
+): Promise<ParseResult> {
   if (!file) {
     return { rows: [], errors: ["No file selected"] };
   }
@@ -131,11 +134,11 @@ export async function parseCSVFile(file: File): Promise<ParseResult> {
   }
 
   if (isCSV(file)) {
-    return parseCSV(file);
+    return parseCSV(file, requiredColumns);
   }
 
   if (isXLSX(file)) {
-    return parseXLSX(file);
+    return parseXLSX(file, requiredColumns);
   }
 
   return { rows: [], errors: ["File must be a CSV or Excel file (.csv, .xlsx)"] };
