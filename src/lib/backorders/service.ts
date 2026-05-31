@@ -95,10 +95,22 @@ export async function syncBackordersForOrder(orderId: string): Promise<{ created
           });
         }
       } else if (current.status === "cancelled") {
-        // Reopen a previously cancelled back-order if the line is backordered again.
+        // Reopen a previously cancelled back-order if the line is backordered
+        // again. Reset the risk/ETA state too, otherwise the row resurfaces
+        // carrying stale at-risk/slippage flags from its previous life.
         await supabaseAdmin
           .from("back_orders")
-          .update({ status: "awaiting", quantity: boQty, resolved_at: null, resolved_via: null })
+          .update({
+            status: "awaiting",
+            quantity: boQty,
+            original_eta: line.backorder_eta ?? null,
+            current_eta: line.backorder_eta ?? null,
+            is_at_risk: false,
+            slippage_days: 0,
+            risk_flagged_at: null,
+            resolved_at: null,
+            resolved_via: null,
+          })
           .eq("id", current.id);
       } else if (current.quantity !== boQty) {
         await supabaseAdmin.from("back_orders").update({ quantity: boQty }).eq("id", current.id);

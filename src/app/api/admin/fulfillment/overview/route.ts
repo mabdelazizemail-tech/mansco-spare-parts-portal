@@ -15,20 +15,41 @@ export async function GET() {
   if (admin instanceof NextResponse) return admin;
 
   try {
-    // Back-orders (all dealers).
-    const backorders = await listBackOrders({ dealerScope: null, limit: 200 });
+    const nowIso = new Date().toISOString();
+
+    // Queue lists (display) — capped, sorted most-urgent first.
+    const backorders = await listBackOrders({ dealerScope: null, limit: 500 });
     const atRisk = backorders.data.filter((b) => b.is_at_risk && b.status !== "cancelled" && b.status !== "fulfilled");
 
-    // Invoices (all dealers) with computed aging.
-    const invoices = await listInvoices({ dealerScope: null, limit: 200 });
+    const invoices = await listInvoices({ dealerScope: null, limit: 500 });
     const overdue = invoices.data.filter((i) => i.effective_status === "overdue");
-    const outstandingTotal = invoices.data.reduce((s, i) => s + i.outstanding_balance, 0);
 
-    // Shipments in transit + pending (raw table — Phase 1).
-    const { count: inTransitCount } = await supabaseAdmin
-      .from("shipments")
-      .select("id", { count: "exact", head: true })
-      .in("shipment_status", ["shipped", "in_transit"]);
+    // Headline KPI counts — exact, via count queries (independent of the
+    // capped queue lists above so they stay correct at scale).
+    const [atRiskCountRes, overdueCountRes, inTransitRes, unpaidRes] = await Promise.all([
+      supabaseAdmin
+        .from("back_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("is_at_risk", true)
+        .in("status", ["awaiting", "in_transit"]),
+      supabaseAdmin
+        .from("invoices")
+        .select("id", { count: "exact", head: true })
+        .not("status", "in", "(paid,cancelled)")
+        .lt("due_date", nowIso),
+      supabaseAdmin
+        .from("shipments")
+        .select("id", { count: "exact", head: true })
+        .in("shipment_status", ["shipped", "in_transit"]),
+      // Outstanding balance: total_amount over all not-yet-settled invoices.
+      supabaseAdmin
+        .from("invoices")
+        .select("total_amount")
+        .not("status", "in", "(paid,cancelled)")
+        .limit(2000),
+    ]);
+
+    const outstandingTotal = (unpaidRes.data ?? []).reduce((s, i) => s + Number(i.total_amount), 0);
 
     const { data: pendingShipments } = await supabaseAdmin
       .from("shipments")
@@ -40,9 +61,9 @@ export async function GET() {
     return NextResponse.json({
       data: {
         kpis: {
-          shipments_in_transit: inTransitCount ?? 0,
-          invoices_overdue: overdue.length,
-          backorders_at_risk: atRisk.length,
+          shipments_in_transit: inTransitRes.count ?? 0,
+          invoices_overdue: overdueCountRes.count ?? 0,
+          backorders_at_risk: atRiskCountRes.count ?? 0,
           outstanding_balance: Math.round(outstandingTotal * 100) / 100,
         },
         queues: {

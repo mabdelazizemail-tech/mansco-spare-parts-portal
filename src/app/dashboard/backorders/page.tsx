@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import { StatusBadge } from "@/components/portal/status-badge";
 import type { ToneColor } from "@/lib/portal-data";
 import {
@@ -168,9 +168,8 @@ export default function BackOrdersPage() {
                 const meta = statusMeta[r.status];
                 const isOpen = expanded === r.id;
                 return (
-                  <>
+                  <Fragment key={r.id}>
                     <tr
-                      key={r.id}
                       onClick={() => toggleExpand(r.id)}
                       className={`cursor-pointer border-b border-[#2A2A2A]/50 hover:bg-white/[0.02] ${
                         r.is_at_risk ? "border-l-2 border-l-red-500 bg-red-500/[0.04]" : ""
@@ -202,7 +201,7 @@ export default function BackOrdersPage() {
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${r.id}-history`} className="border-b border-[#2A2A2A]/50 bg-black/20">
+                      <tr className="border-b border-[#2A2A2A]/50 bg-black/20">
                         <td colSpan={8} className="px-12 py-4">
                           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">ETA Change History</p>
                           {(history[r.id] ?? []).length === 0 ? (
@@ -224,7 +223,7 @@ export default function BackOrdersPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
               {rows.length === 0 && (
