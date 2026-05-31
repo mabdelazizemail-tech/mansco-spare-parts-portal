@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin, getAdminUser } from "@/lib/auth-guards";
 
-// GET /api/campaigns/[id]/items – list items for a campaign
+// GET /api/campaigns/[id]/items – list items for a campaign (admin only)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
   const { id } = await params;
   try {
     const { data, error } = await supabaseAdmin
@@ -35,6 +38,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   try {
     const body = await req.json();
@@ -67,6 +72,7 @@ export async function POST(
       campaign_id: id,
       action: "item_added",
       details: { count: toInsert.length, part_numbers: toInsert.map((i) => i.part_number) },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data: data ?? [] }, { status: 201 });
@@ -83,6 +89,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   try {
     const url = new URL(req.url);
@@ -121,6 +129,7 @@ export async function DELETE(
         campaign_id: id,
         action: "item_removed",
         details: { part_number: item.part_number },
+        performed_by: admin.id,
       });
     }
 

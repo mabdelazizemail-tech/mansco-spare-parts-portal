@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin, getAdminUser } from "@/lib/auth-guards";
+import { dbError } from "@/lib/api-errors";
 
-// GET /api/campaigns – list all campaigns
+// GET /api/campaigns – list all campaigns (admin only)
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
+
   try {
     const url = new URL(req.url);
     const status = url.searchParams.get("status"); // filter by status
@@ -19,10 +24,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json(
-        { error: { code: "DB_ERROR", message: error.message } },
-        { status: 500 }
-      );
+      return dbError(error, "campaigns.list");
     }
 
     return NextResponse.json({ data: data ?? [] });
@@ -34,8 +36,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/campaigns – create a new campaign
+// POST /api/campaigns – create a new campaign (admin only)
 export async function POST(req: NextRequest) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
+
   try {
     const body = await req.json();
 
@@ -73,15 +78,13 @@ export async function POST(req: NextRequest) {
         target_dealer_ids: target_dealer_ids || [],
         target_dealer_group: target_dealer_group || null,
         eligibility_rules: eligibility_rules || {},
+        created_by: admin.id,
       })
       .select()
       .single();
 
     if (campError) {
-      return NextResponse.json(
-        { error: { code: "DB_ERROR", message: campError.message } },
-        { status: 500 }
-      );
+      return dbError(campError, "campaigns.create");
     }
 
     // Create items if provided
@@ -104,6 +107,7 @@ export async function POST(req: NextRequest) {
       campaign_id: campaign.id,
       action: "created",
       details: { name, campaign_type: campaign_type || "discount" },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({ data: campaign }, { status: 201 });

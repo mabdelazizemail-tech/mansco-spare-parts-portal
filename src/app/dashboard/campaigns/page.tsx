@@ -14,16 +14,16 @@ const now = new Date();
 const oneWeek = 7 * 24 * 60 * 60 * 1000;
 
 const activeCampaigns = campaigns.filter(
-  (c) => new Date(c.validUntil).getTime() - now.getTime() > oneWeek
+  (c) => new Date(c.endDate).getTime() - now.getTime() > oneWeek
 );
 const expiringSoon = campaigns.filter(
   (c) => {
-    const diff = new Date(c.validUntil).getTime() - now.getTime();
+    const diff = new Date(c.endDate).getTime() - now.getTime();
     return diff > 0 && diff <= oneWeek;
   }
 );
 const expired = campaigns.filter(
-  (c) => new Date(c.validUntil).getTime() <= now.getTime()
+  (c) => new Date(c.endDate).getTime() <= now.getTime()
 );
 
 const gradients = [
@@ -36,7 +36,7 @@ const gradients = [
 function CampaignCard({ campaign, idx }: { campaign: typeof campaigns[0]; idx: number }) {
   const daysLeft = Math.max(
     0,
-    Math.ceil((new Date(campaign.validUntil).getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+    Math.ceil((new Date(campaign.endDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
   );
   const isExpired = daysLeft === 0;
 
@@ -45,19 +45,20 @@ function CampaignCard({ campaign, idx }: { campaign: typeof campaigns[0]; idx: n
       className={`relative flex flex-col justify-between overflow-hidden rounded-xl border border-[#2A2A2A] bg-gradient-to-br p-6 min-h-[200px] ${gradients[idx % gradients.length]}`}
     >
       <div className="flex items-center justify-between">
-        <StatusBadge tone={isExpired ? "red" : daysLeft <= 7 ? "orange" : "green"}>
-          {isExpired ? "Expired" : `${daysLeft} days left`}
-        </StatusBadge>
+        <StatusBadge
+          tone={isExpired ? "destructive" : daysLeft <= 7 ? "warning" : "success"}
+          label={isExpired ? "Expired" : `${daysLeft} days left`}
+        />
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white text-sm font-bold">
-          {campaign.discountPercent}%
+          {campaign.discountPct}%
         </div>
       </div>
       <div className="mt-4">
-        <h3 className="text-lg font-bold text-white">{campaign.title}</h3>
+        <h3 className="text-lg font-bold text-white">{campaign.name}</h3>
         <p className="mt-1 text-sm text-white/50 line-clamp-2">{campaign.description}</p>
         <div className="mt-3 flex items-center gap-2 text-xs text-white/40">
           <CalendarDays className="h-3.5 w-3.5" />
-          Valid until {new Date(campaign.validUntil).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+          Valid until {new Date(campaign.endDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { canTransition } from "@/lib/rules/order-validation";
+import { getAdminUser } from "@/lib/auth-guards";
+import { serverError } from "@/lib/api-errors";
 
 /**
  * POST /api/orders/[id]/review — admin actions on an order under review.
@@ -28,15 +30,21 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Authorization: admins only. Identity (reviewer_id) is taken from the
+  // verified session — NEVER from the request body (which was spoofable).
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
+  const reviewer_id = admin.id;
+
   const { id } = await params;
 
   try {
     const body = await req.json();
-    const { action, reviewer_id, notes, line_decisions, line_proposals } = body ?? {};
+    const { action, notes, line_decisions, line_proposals } = body ?? {};
 
-    if (!action || !reviewer_id) {
+    if (!action) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "action and reviewer_id are required" } },
+        { error: { code: "VALIDATION_ERROR", message: "action is required" } },
         { status: 400 },
       );
     }
@@ -230,14 +238,6 @@ export async function POST(
       },
     });
   } catch (e) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "SERVER_ERROR",
-          message: e instanceof Error ? e.message : "Unexpected error",
-        },
-      },
-      { status: 500 },
-    );
+    return serverError(e, "orders/[id]/review");
   }
 }

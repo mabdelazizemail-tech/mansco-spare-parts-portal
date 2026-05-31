@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminUser } from "@/lib/auth-guards";
 
 type BulkMode = "set_percentage" | "set_fixed" | "increase_pct" | "decrease_pct";
 
@@ -13,6 +14,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   try {
     const { mode, value } = await req.json();
@@ -129,6 +132,7 @@ export async function POST(
         items_affected: patches.length,
         items_total: items.length,
       },
+      performed_by: admin.id,
     });
 
     return NextResponse.json({

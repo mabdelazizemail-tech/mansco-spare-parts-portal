@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminUser } from "@/lib/auth-guards";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Authorization: admins only. Previously unauthenticated → anyone could
+  // approve/reject any registration (privilege escalation).
+  const admin = await getAdminUser();
+  if (admin instanceof NextResponse) return admin;
+
   try {
     const { id } = await params;
     // FIX (G5): Accept admin_notes alongside rejection_reason
@@ -51,6 +57,7 @@ export async function POST(
         .update({
           review_status: "approved",
           reviewed_at: new Date().toISOString(),
+          reviewed_by: admin.id,
           // store admin notes if provided
           ...(admin_notes ? { rejection_reason: `[Admin Notes] ${admin_notes}` } : {}),
         })
@@ -112,6 +119,7 @@ export async function POST(
           review_status: "rejected",
           rejection_reason: rejection_reason.trim(),
           reviewed_at: new Date().toISOString(),
+          reviewed_by: admin.id,
         })
         .eq("id", id);
 

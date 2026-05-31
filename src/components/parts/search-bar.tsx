@@ -169,7 +169,7 @@ export function SearchBar({
           <Select
             value={filters.category || "__all__"}
             onValueChange={(v) =>
-              onFiltersChange({ ...filters, category: v === "__all__" ? "" : v })
+              onFiltersChange({ ...filters, category: !v || v === "__all__" ? "" : v })
             }
           >
             <SelectTrigger className="w-full sm:w-48">
@@ -188,7 +188,7 @@ export function SearchBar({
           <Select
             value={filters.model || "__all__"}
             onValueChange={(v) =>
-              onFiltersChange({ ...filters, model: v === "__all__" ? "" : v })
+              onFiltersChange({ ...filters, model: !v || v === "__all__" ? "" : v })
             }
           >
             <SelectTrigger className="w-full sm:w-48">

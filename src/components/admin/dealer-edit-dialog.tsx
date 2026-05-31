@@ -78,10 +78,11 @@ export function DealerEditDialog({
             <Label>{t("dashboard.financial_status")}</Label>
             <Select
               value={form.financialStatus}
-              onValueChange={(val: string) =>
+              onValueChange={(val: string | null) =>
                 setForm({
                   ...form,
-                  financialStatus: val as Dealer["financialStatus"],
+                  financialStatus: (val ??
+                    form.financialStatus) as Dealer["financialStatus"],
                 })
               }
             >

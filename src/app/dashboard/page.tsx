@@ -262,12 +262,12 @@ export default function DealerDashboard() {
                   className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#111] p-3"
                 >
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#00BFA6]/10 text-[#00BFA6] text-sm font-bold shrink-0">
-                    {c.discountPercent}%
+                    {c.discountPct}%
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{c.title}</p>
+                    <p className="text-sm font-medium text-white truncate">{c.name}</p>
                     <p className="text-xs text-white/40">
-                      Until {new Date(c.validUntil).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                      Until {new Date(c.endDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
                     </p>
                   </div>
                 </div>

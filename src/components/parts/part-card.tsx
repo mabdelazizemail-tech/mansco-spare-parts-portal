@@ -62,7 +62,7 @@ export function PartCard({ part, view, onAddToOrder }: PartCardProps) {
             <AvailabilityBadge
               status={part.availability}
               stockCount={part.stockCount}
-              eta={part.eta}
+              eta={part.eta ?? undefined}
             />
           </div>
 
@@ -127,7 +127,7 @@ export function PartCard({ part, view, onAddToOrder }: PartCardProps) {
         <AvailabilityBadge
           status={part.availability}
           stockCount={part.stockCount}
-          eta={part.eta}
+          eta={part.eta ?? undefined}
         />
 
         {/* Spacer */}

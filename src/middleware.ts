@@ -1,7 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/", "/register", "/verify-email", "/forgot-password", "/reset-password", "/api/auth/callback", "/api/registration"];
+// Public PAGE routes (prefix match is acceptable — these have no protected children).
+const PUBLIC_PAGE_PREFIXES = ["/register", "/verify-email", "/forgot-password", "/reset-password"];
+
+// Public routes that must match EXACTLY. Critically, "/api/registration" is the
+// public dealer-signup POST only — its sub-paths (/list, /[id]/review,
+// /documents) are NOT public and self-guard with requireAdmin.
+const PUBLIC_EXACT = ["/", "/api/auth/callback", "/api/registration"];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -27,15 +33,10 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  const isPublic = PUBLIC_ROUTES.some(
-    (route) => path === route || path.startsWith(route + "/")
-  );
+  const isPublic =
+    PUBLIC_EXACT.includes(path) ||
+    PUBLIC_PAGE_PREFIXES.some((route) => path === route || path.startsWith(route + "/"));
   if (isPublic) {
-    return supabaseResponse;
-  }
-
-  const isDemoAdmin = request.cookies.get("demo-admin")?.value === "true";
-  if (isDemoAdmin && (path.startsWith("/dashboard/admin") || path.startsWith("/api/"))) {
     return supabaseResponse;
   }
 

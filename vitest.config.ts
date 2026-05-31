@@ -5,7 +5,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    setupFiles: ["tests/setup.ts"],
     include: ["tests/**/*.test.ts"],
+    // Integration tests hit a live Supabase and run separately (not in the
+    // default unit run). See README / SECURITY.md.
+    exclude: ["node_modules/**", "tests/integration/**", "elegance-auto-web-main/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

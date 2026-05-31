@@ -7,11 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "node --env-file=.env.local --import tsx tests/e2e-simulation.ts",
-    "test:e2e:playwright": "playwright test"
+    "test:e2e:playwright": "playwright test",
+    "prisma:validate": "prisma validate",
+    "prisma:drift": "prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-url $DATABASE_URL --exit-code"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -38,6 +41,7 @@
     "@prisma/client": "^7.8.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.7",

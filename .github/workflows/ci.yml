@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging, develop]
+  pull_request:
+    branches: [main, staging, develop]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Dummy values so module-load-time Supabase client creation and the build
+    # do not fail. Real secrets are NOT needed for lint/typecheck/test/build.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: dummy-service-role-key
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Advisory until the pre-existing lint baseline (no-explicit-any / unused
+      # vars) is burned down, then flip to a hard gate by removing continue-on-error.
+      - name: Lint (advisory)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit & integration tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # Fail the build on High/Critical advisories in production dependencies.
+      - name: npm audit (prod, high+)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Prisma schema must stay in sync with the database. Requires a read-only
+      # DATABASE_URL secret; skipped automatically if the secret is absent.
+      - name: Prisma schema drift check
+        if: ${{ secrets.DATABASE_URL != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run prisma:drift

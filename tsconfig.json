@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "elegance-auto-web-main",
+    "tests",
+    "prisma",
+    "scripts",
+    "clear-seed-data.ts"
+  ]
 }

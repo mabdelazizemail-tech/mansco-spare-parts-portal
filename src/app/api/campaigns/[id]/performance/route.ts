@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth-guards";
 
-// GET /api/campaigns/[id]/performance – campaign performance analytics
+// GET /api/campaigns/[id]/performance – campaign performance analytics (admin only)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
   const { id } = await params;
   try {
     // Campaign info

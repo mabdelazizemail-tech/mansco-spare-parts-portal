@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "./supabase/server";
 
 /**
- * Guard for admin-only API routes. Returns null if the request is
- * authorized, or a NextResponse with the appropriate error status otherwise.
+ * Resolve the authenticated admin user, or return a NextResponse error.
  *
- * Allows: real Supabase admins (user_metadata.role === "admin" | "super_admin")
- *         and the demo-admin cookie used in local development.
+ * This is the canonical admin authorization primitive. Routes that need the
+ * admin's identity (e.g. to stamp `reviewed_by` / `approved_by` from the
+ * SESSION rather than a spoofable request body) should use this directly.
+ *
+ * Allows ONLY real Supabase admins (user_metadata.role === "admin" |
+ * "super_admin"). There is intentionally no demo/bypass path — identity is
+ * always derived from the verified Supabase session.
  */
-export async function requireAdmin(): Promise<NextResponse | null> {
+export async function getAdminUser(): Promise<User | NextResponse> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -29,7 +34,19 @@ export async function requireAdmin(): Promise<NextResponse | null> {
     );
   }
 
-  return null;
+  return user;
+}
+
+/**
+ * Guard for admin-only API routes. Returns null if the request is
+ * authorized, or a NextResponse with the appropriate error status otherwise.
+ *
+ * Allows ONLY real Supabase admins (user_metadata.role === "admin" |
+ * "super_admin"). No demo/bypass path.
+ */
+export async function requireAdmin(): Promise<NextResponse | null> {
+  const result = await getAdminUser();
+  return result instanceof NextResponse ? result : null;
 }
 
 /**
