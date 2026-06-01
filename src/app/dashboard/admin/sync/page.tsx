@@ -79,6 +79,16 @@ const FILE_TYPE_META: Record<FileType, { label: string; description: string; ico
   },
 };
 
+// Columns the importer HARD-requires — uploads are gated only on these. The
+// remaining expectedColumns are recommended but optional (server derives or
+// defaults them), so their absence must not block a valid upload.
+const REQUIRED_COLUMNS: Record<FileType, string[]> = {
+  stock: ["part_number", "quantity_available"],
+  pricing: ["part_number", "unit_price"],
+  parts_catalog: ["part_number", "name_en"],
+  invoices: ["invoice_number", "order_number", "part_number", "quantity", "unit_price"],
+};
+
 function formatDateTime(d: string | null): string {
   if (!d) return "—";
   return new Date(d).toLocaleString("en-GB", {
@@ -285,10 +295,13 @@ export default function SyncUploadPage() {
     }
   };
 
-  // Compute column mismatch warnings for preview
+  // Compute column mismatch warnings for preview. The upload is gated on
+  // REQUIRED_COLUMNS only; expectedColumns drive the reference chips and the
+  // "unexpected column" hint.
   const expectedCols = FILE_TYPE_META[fileType].expectedColumns;
+  const requiredCols = REQUIRED_COLUMNS[fileType];
   const previewMissingCols = preview
-    ? expectedCols.filter((c) => !preview.headers.includes(c))
+    ? requiredCols.filter((c) => !preview.headers.includes(c))
     : [];
   const previewExtraCols = preview
     ? preview.headers.filter((h) => !expectedCols.includes(h))

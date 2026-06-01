@@ -11,7 +11,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 export type InvoiceStatus = "pending" | "paid" | "overdue" | "cancelled";
 export type AgingBucket = "current" | "30_days" | "60_days" | "90_plus";
 
-const VAT_RATE = 0.14;
+/** Egypt VAT rate, shared by invoice issuance and SAP invoice import. */
+export const VAT_RATE = 0.14;
 const PAYMENT_TERMS_DAYS = 30;
 
 export interface InvoiceRecord {

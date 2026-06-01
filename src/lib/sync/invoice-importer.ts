@@ -21,6 +21,19 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { parseCsv, type CsvRow } from "./csv";
 import { startSyncLog, completeSyncLog, type RowError } from "./sync-log";
+import { VAT_RATE } from "@/lib/invoices/service";
+
+/** Order statuses that may advance to "invoiced". Shipped/delivered/cancelled
+ *  orders are left untouched so a re-import never regresses them. */
+const PRE_INVOICE_STATUSES = [
+  "submitted",
+  "under_review",
+  "approved",
+  "partial",
+  "back_ordered",
+  "done",
+  "pending_dealer_confirmation",
+];
 
 export interface InvoiceSyncResult {
   sync_log_id: string;
@@ -30,8 +43,6 @@ export interface InvoiceSyncResult {
   error_details: RowError[];
   duration_ms: number;
 }
-
-const VAT_RATE = 0.14;
 
 function num(v: string | undefined): number {
   const n = Number(v);
@@ -139,11 +150,16 @@ export async function importInvoiceCsv(opts: {
         if (lineErr) throw new Error(`insert invoice_lines failed: ${lineErr.message}`);
 
         // Sync order to invoiced (best-effort; don't fail the row if it errors).
+        // Only ADVANCE to invoiced from a pre-invoice status — never regress an
+        // order that has already shipped/delivered (this importer is
+        // re-runnable, so an unconditional update would walk delivered → invoiced
+        // on every re-import of the historical invoice feed).
         try {
+          const newStatus = PRE_INVOICE_STATUSES.includes(order.status) ? "invoiced" : order.status;
           await supabaseAdmin
             .from("orders")
             .update({
-              status: "invoiced",
+              status: newStatus,
               invoice_number: order.invoice_number ?? invoiceNumber,
               invoice_date: invoiceDate,
             })
