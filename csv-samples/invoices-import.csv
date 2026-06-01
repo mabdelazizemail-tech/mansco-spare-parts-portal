@@ -1,0 +1,4 @@
+invoice_number,order_number,invoice_date,due_date,currency,subtotal,vat_amount,total_amount,delivery_note,part_number,part_name,quantity,unit_price,line_total
+INV-2026-0001,ORD-2026-AB12CD,2026-05-30,2026-06-29,EGP,19500,2730,22230,DN-558102,PSA-4254.22,Front Brake Pad Set,10,1250,12500
+INV-2026-0001,ORD-2026-AB12CD,2026-05-30,2026-06-29,EGP,19500,2730,22230,DN-558102,PSA-1109.CK,Oil Filter,25,280,7000
+INV-2026-0002,ORD-2026-EF34GH,2026-05-31,2026-06-30,EGP,8400,1176,9576,DN-558119,1637756080,Water Pump,2,4200,8400

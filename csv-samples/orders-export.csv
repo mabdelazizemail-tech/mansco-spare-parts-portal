@@ -1,0 +1,4 @@
+order_number,dealer_code,order_type,submitted_at,part_number,quantity_confirmed,unit_price,line_total,currency,eta
+ORD-2026-AB12CD,DLR-001,daily,2026-05-29T08:15:00Z,PSA-4254.22,10,1250,12500,EGP,2026-06-02
+ORD-2026-AB12CD,DLR-001,daily,2026-05-29T08:15:00Z,PSA-1109.CK,25,280,7000,EGP,2026-06-02
+ORD-2026-EF34GH,DLR-014,air_dhl,2026-05-30T11:40:00Z,1637756080,2,4200,8400,EGP,2026-06-01

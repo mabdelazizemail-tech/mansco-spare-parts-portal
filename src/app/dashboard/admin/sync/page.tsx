@@ -42,7 +42,7 @@ type SyncResult = {
   duration_ms: number;
 };
 
-type FileType = "stock" | "pricing" | "parts_catalog";
+type FileType = "stock" | "pricing" | "parts_catalog" | "invoices";
 
 const FILE_TYPE_META: Record<FileType, { label: string; description: string; icon: React.ElementType; color: string; expectedColumns: string[] }> = {
   stock: {
@@ -66,6 +66,27 @@ const FILE_TYPE_META: Record<FileType, { label: string; description: string; ico
     color: "violet",
     expectedColumns: ["part_number", "name_en", "name_ar", "category_id", "model", "oem", "image_url"],
   },
+  invoices: {
+    label: "Invoices",
+    description: "SAP-issued invoices linked to orders (one row per line)",
+    icon: FileText,
+    color: "cyan",
+    expectedColumns: [
+      "invoice_number", "order_number", "invoice_date", "due_date", "currency",
+      "subtotal", "vat_amount", "total_amount", "delivery_note",
+      "part_number", "part_name", "quantity", "unit_price", "line_total",
+    ],
+  },
+};
+
+// Columns the importer HARD-requires — uploads are gated only on these. The
+// remaining expectedColumns are recommended but optional (server derives or
+// defaults them), so their absence must not block a valid upload.
+const REQUIRED_COLUMNS: Record<FileType, string[]> = {
+  stock: ["part_number", "quantity_available"],
+  pricing: ["part_number", "unit_price"],
+  parts_catalog: ["part_number", "name_en"],
+  invoices: ["invoice_number", "order_number", "part_number", "quantity", "unit_price"],
 };
 
 function formatDateTime(d: string | null): string {
@@ -135,6 +156,54 @@ export default function SyncUploadPage() {
   const [showAllErrors, setShowAllErrors] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  type SyncStatus = {
+    any_stale: boolean;
+    threshold_minutes: number;
+    feeds: { feed: string; last_synced_at: string | null; age_minutes: number | null; stale: boolean }[];
+  };
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sync/status");
+      if (res.ok) setSyncStatus((await res.json()).data ?? null);
+    } catch {
+      /* non-fatal — badge just won't show */
+    }
+  }, []);
+
+  const exportOrders = async () => {
+    setExporting(true);
+    setExportMsg("");
+    try {
+      const res = await fetch("/api/sync/orders-export", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error?.message || "Export failed");
+      const { csv, file_name, orders_exported, lines_exported } = body.data;
+      if (orders_exported > 0) {
+        const blob = new Blob(["﻿", csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file_name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setExportMsg(`Exported ${orders_exported} order(s), ${lines_exported} line(s) → ${file_name}`);
+      } else {
+        setExportMsg("No approved/partial orders are pending export.");
+      }
+      await fetchLogs();
+    } catch (e) {
+      setExportMsg(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const fetchLogs = useCallback(async () => {
     setLogsLoading(true);
     try {
@@ -151,7 +220,8 @@ export default function SyncUploadPage() {
 
   useEffect(() => {
     fetchLogs();
-  }, [fetchLogs]);
+    fetchStatus();
+  }, [fetchLogs, fetchStatus]);
 
   const handleFile = async (f: File) => {
     setError("");
@@ -200,14 +270,17 @@ export default function SyncUploadPage() {
     setError("");
     setResult(null);
     try {
-      const res = await fetch("/api/sync/parts", {
+      // Invoices go to the dedicated invoice importer; the parts feeds share
+      // /api/sync/parts and pass file_type.
+      const isInvoices = fileType === "invoices";
+      const res = await fetch(isInvoices ? "/api/sync/invoices" : "/api/sync/parts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          file_type: fileType,
-          file_name: file.name,
-          csv_content: csvContent,
-        }),
+        body: JSON.stringify(
+          isInvoices
+            ? { file_name: file.name, csv_content: csvContent }
+            : { file_type: fileType, file_name: file.name, csv_content: csvContent }
+        ),
       });
       const body = await res.json();
       if (!res.ok && res.status !== 207) {
@@ -222,10 +295,13 @@ export default function SyncUploadPage() {
     }
   };
 
-  // Compute column mismatch warnings for preview
+  // Compute column mismatch warnings for preview. The upload is gated on
+  // REQUIRED_COLUMNS only; expectedColumns drive the reference chips and the
+  // "unexpected column" hint.
   const expectedCols = FILE_TYPE_META[fileType].expectedColumns;
+  const requiredCols = REQUIRED_COLUMNS[fileType];
   const previewMissingCols = preview
-    ? expectedCols.filter((c) => !preview.headers.includes(c))
+    ? requiredCols.filter((c) => !preview.headers.includes(c))
     : [];
   const previewExtraCols = preview
     ? preview.headers.filter((h) => !expectedCols.includes(h))
@@ -234,12 +310,46 @@ export default function SyncUploadPage() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">SAP CSV Sync</h1>
-        <p className="mt-1 text-sm text-white/40">
-          Upload SAP exports to refresh stock availability, pricing, and the parts catalog.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">SAP CSV Sync</h1>
+          <p className="mt-1 text-sm text-white/40">
+            Import SAP exports (stock, pricing, catalog, invoices) and export new orders back to SAP.
+          </p>
+        </div>
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <button
+            onClick={exportOrders}
+            disabled={exporting}
+            className="flex items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-4 py-2 text-xs font-semibold text-white/70 transition hover:text-white disabled:opacity-50"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Export Orders → SAP
+          </button>
+          {exportMsg && <p className="text-[11px] text-white/50 sm:text-right max-w-xs">{exportMsg}</p>}
+        </div>
       </div>
+
+      {/* Stale-data warning */}
+      {syncStatus?.any_stale && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+          <div className="text-xs text-amber-400/90">
+            <p className="font-semibold">SAP data may be stale</p>
+            <p className="mt-0.5 text-amber-400/70">
+              {syncStatus.feeds
+                .filter((f) => f.stale)
+                .map((f) =>
+                  f.last_synced_at
+                    ? `${f.feed.replace("_", " ")} (${f.age_minutes}m ago)`
+                    : `${f.feed.replace("_", " ")} (never synced)`
+                )
+                .join(" · ")}{" "}
+              — older than the {syncStatus.threshold_minutes}-minute threshold. Re-import the latest SAP export.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* File type selector */}
       <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
@@ -247,7 +357,7 @@ export default function SyncUploadPage() {
           <CardTitle className="text-base text-white">1. Select File Type</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {(Object.entries(FILE_TYPE_META) as [FileType, typeof FILE_TYPE_META[FileType]][]).map(([key, meta]) => {
               const Icon = meta.icon;
               const isActive = fileType === key;
@@ -255,6 +365,7 @@ export default function SyncUploadPage() {
                 emerald: { border: "border-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-400" },
                 amber: { border: "border-amber-500", bg: "bg-amber-500/10", text: "text-amber-400" },
                 violet: { border: "border-violet-500", bg: "bg-violet-500/10", text: "text-violet-400" },
+                cyan: { border: "border-cyan-500", bg: "bg-cyan-500/10", text: "text-cyan-400" },
               };
               const c = colorClasses[meta.color];
               return (
