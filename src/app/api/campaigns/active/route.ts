@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireDealerSession } from "@/lib/auth-guards";
 import { dbError } from "@/lib/api-errors";
+import { toActiveCampaign, type ActiveCampaignRow } from "@/lib/campaigns/active-mapper";
 
 /**
  * GET /api/campaigns/active — read-only list of ACTIVE campaigns for the portal.
@@ -40,7 +41,7 @@ export async function GET() {
   let query = supabaseAdmin
     .from("campaigns")
     .select(
-      "id, name, description, campaign_type, status, start_date, end_date, target_audience, target_dealer_ids, campaign_items(discount_type, discount_value)"
+      "id, name, description, campaign_type, status, start_date, end_date, target_audience, target_dealer_ids, cover_image_url, campaign_items(discount_type, discount_value)"
     )
     .eq("status", "active")
     .order("end_date", { ascending: true });
@@ -53,50 +54,7 @@ export async function GET() {
   const { data, error } = await query;
   if (error) return dbError(error, "campaigns.active");
 
-  type ItemRow = { discount_type: string; discount_value: number };
-  type CampaignRow = {
-    id: string;
-    name: string;
-    description: string | null;
-    campaign_type: string;
-    start_date: string;
-    end_date: string;
-    target_audience: string;
-    campaign_items?: ItemRow[];
-  };
-
-  // Shape for the dealer card UI: derive a representative discount label from
-  // the campaign's items (highest percentage; else highest fixed amount).
-  const campaigns = (data ?? []).map((c: CampaignRow) => {
-    const items = c.campaign_items ?? [];
-    const pctValues = items
-      .filter((i) => i.discount_type === "percentage")
-      .map((i) => Number(i.discount_value));
-    const fixedValues = items
-      .filter((i) => i.discount_type === "fixed")
-      .map((i) => Number(i.discount_value));
-
-    const maxPct = pctValues.length ? Math.max(...pctValues) : null;
-    const maxFixed = fixedValues.length ? Math.max(...fixedValues) : null;
-
-    const discountLabel =
-      maxPct !== null
-        ? `${maxPct}%`
-        : maxFixed !== null
-          ? `${maxFixed} EGP`
-          : null;
-
-    return {
-      id: c.id,
-      name: c.name,
-      description: c.description ?? "",
-      campaignType: c.campaign_type,
-      startDate: c.start_date,
-      endDate: c.end_date,
-      discountLabel,
-      itemCount: items.length,
-    };
-  });
+  const campaigns = (data ?? []).map((c) => toActiveCampaign(c as ActiveCampaignRow));
 
   return NextResponse.json({ data: campaigns });
 }
