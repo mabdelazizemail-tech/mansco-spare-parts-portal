@@ -27,6 +27,7 @@ import {
   MessageSquare,
   ChevronRight,
 } from "lucide-react";
+import { CampaignBanner } from "@/components/dashboard/campaign-banner";
 
 /* ── KPI Card ── */
 function KpiCard({
@@ -144,6 +145,9 @@ export default function DealerDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* ── Featured Campaign Banner ── */}
+      <CampaignBanner />
 
       {/* ── Financial Block Alert ── */}
       {financialBlocked && (
