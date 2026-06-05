@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import ItemsCSVUpload from "@/components/campaign-wizard/items-csv-upload";
+import CampaignCoverUpload from "@/components/campaign-wizard/campaign-cover-upload";
 import type { DiscountType } from "@/lib/csv/schemas";
 
 type CampaignItemDraft = {
@@ -66,6 +67,11 @@ export default function NewCampaignWizard() {
   // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const coverPreview = useMemo(
+    () => (coverFile ? URL.createObjectURL(coverFile) : null),
+    [coverFile]
+  );
   const [campaignType, setCampaignType] = useState("discount");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -201,7 +207,20 @@ export default function NewCampaignWizard() {
         throw new Error(b.error?.message || "Failed to create campaign");
       }
       const body = await res.json();
-      router.push(`/dashboard/admin/campaigns/${body.data.id}`);
+      const newId = body.data.id as string;
+
+      // Phase 2: upload the cover (optional). If it fails, the campaign still
+      // exists — send the admin to the edit page to retry rather than losing it.
+      if (coverFile) {
+        const fd = new FormData();
+        fd.append("file", coverFile);
+        const coverRes = await fetch(`/api/campaigns/${newId}/cover`, { method: "POST", body: fd });
+        if (!coverRes.ok) {
+          router.push(`/dashboard/admin/campaigns/${newId}/edit`);
+          return;
+        }
+      }
+      router.push(`/dashboard/admin/campaigns/${newId}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create campaign");
     } finally {
@@ -350,6 +369,13 @@ export default function NewCampaignWizard() {
                   maxLength={500}
                 />
                 <p className="mt-1 text-[10px] text-white/30">{description.length}/500 characters</p>
+              </div>
+              <div>
+                <Label className={labelClass}>Cover Image</Label>
+                <p className="mb-2 text-[11px] text-white/30">
+                  Optional. Shown to dealers on campaign cards and the dashboard banner.
+                </p>
+                <CampaignCoverUpload onFileSelected={setCoverFile} />
               </div>
               <div>
                 <Label className={labelClass}>Campaign Type *</Label>
@@ -681,6 +707,17 @@ export default function NewCampaignWizard() {
               <div className="space-y-3">
                 <ReviewRow label="Name" value={name} />
                 <ReviewRow label="Description" value={description || "—"} />
+                <ReviewRow
+                  label="Cover"
+                  value={
+                    coverPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={coverPreview} alt="Cover preview" className="h-16 w-28 rounded-md object-cover" />
+                    ) : (
+                      "None"
+                    )
+                  }
+                />
                 <ReviewRow
                   label="Type"
                   value={
