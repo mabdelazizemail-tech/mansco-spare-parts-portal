@@ -10,14 +10,6 @@ const supabaseOrigin = (() => {
   }
 })();
 
-const supabaseHost = (() => {
-  try {
-    return supabaseUrl ? new URL(supabaseUrl).hostname : "";
-  } catch {
-    return "";
-  }
-})();
-
 // Baseline Content-Security-Policy.
 // NOTE: 'unsafe-inline'/'unsafe-eval' for scripts are a pragmatic baseline so the
 // current app keeps working; harden to a nonce-based policy as a follow-up.
@@ -57,17 +49,17 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   // Allow campaign cover images served from the Supabase public storage bucket.
-  images: supabaseHost
-    ? {
-        remotePatterns: [
-          {
-            protocol: "https" as const,
-            hostname: supabaseHost,
-            pathname: "/storage/v1/object/public/**",
-          },
-        ],
-      }
-    : undefined,
+  // Static wildcard (not env-derived) so the allowlist is always present in the
+  // build, regardless of env availability at next.config evaluation time.
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https" as const,
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
   // Build-time safety: do NOT ship type errors to production.
   // (Next 16 removed the `eslint` build hook; linting runs via `npm run lint`
   // in CI — see .github/workflows/ci.yml.)
