@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { StatusBadge } from "@/components/portal/status-badge";
 import { CalendarDays, Tag } from "lucide-react";
 
@@ -8,6 +9,7 @@ type ActiveCampaign = {
   id: string;
   name: string;
   description: string;
+  coverImageUrl: string | null;
   campaignType: string;
   startDate: string;
   endDate: string;
@@ -31,33 +33,51 @@ function daysLeftFrom(endDate: string): number {
 function CampaignCard({ campaign, idx }: { campaign: ActiveCampaign; idx: number }) {
   const daysLeft = daysLeftFrom(campaign.endDate);
   const isExpired = daysLeft === 0;
+  const hasCover = Boolean(campaign.coverImageUrl);
 
   return (
     <div
-      className={`relative flex flex-col justify-between overflow-hidden rounded-xl border border-[#2A2A2A] bg-gradient-to-br p-6 min-h-[200px] ${gradients[idx % gradients.length]}`}
+      className={`relative flex min-h-[200px] flex-col justify-between overflow-hidden rounded-xl border border-[#2A2A2A] ${
+        hasCover ? "bg-[#0D0D0D]" : `bg-gradient-to-br p-6 ${gradients[idx % gradients.length]}`
+      }`}
     >
-      <div className="flex items-center justify-between">
-        <StatusBadge
-          tone={isExpired ? "destructive" : daysLeft <= 7 ? "warning" : "success"}
-          label={isExpired ? "Expired" : `${daysLeft} days left`}
-        />
-        {campaign.discountLabel && (
-          <div className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-2 text-white text-sm font-bold">
-            {campaign.discountLabel}
+      {hasCover && (
+        <>
+          <Image
+            src={campaign.coverImageUrl as string}
+            alt={campaign.name}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/20" />
+        </>
+      )}
+
+      <div className={`relative z-10 flex flex-1 flex-col justify-between ${hasCover ? "p-6" : ""}`}>
+        <div className="flex items-center justify-between">
+          <StatusBadge
+            tone={isExpired ? "destructive" : daysLeft <= 7 ? "warning" : "success"}
+            label={isExpired ? "Expired" : `${daysLeft} days left`}
+          />
+          {campaign.discountLabel && (
+            <div className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-2 text-sm font-bold text-white">
+              {campaign.discountLabel}
+            </div>
+          )}
+        </div>
+        <div className="mt-4">
+          <h3 className="text-lg font-bold text-white">{campaign.name}</h3>
+          <p className="mt-1 line-clamp-2 text-sm text-white/60">{campaign.description}</p>
+          <div className="mt-3 flex items-center gap-2 text-xs text-white/50">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Valid until{" "}
+            {new Date(campaign.endDate).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
           </div>
-        )}
-      </div>
-      <div className="mt-4">
-        <h3 className="text-lg font-bold text-white">{campaign.name}</h3>
-        <p className="mt-1 text-sm text-white/50 line-clamp-2">{campaign.description}</p>
-        <div className="mt-3 flex items-center gap-2 text-xs text-white/40">
-          <CalendarDays className="h-3.5 w-3.5" />
-          Valid until{" "}
-          {new Date(campaign.endDate).toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })}
         </div>
       </div>
     </div>
