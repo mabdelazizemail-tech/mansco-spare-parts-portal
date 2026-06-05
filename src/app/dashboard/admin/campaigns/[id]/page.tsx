@@ -33,6 +33,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +70,7 @@ type Campaign = {
   id: string;
   name: string;
   description: string | null;
+  cover_image_url: string | null;
   campaign_type: string;
   status: string;
   start_date: string;
@@ -571,6 +573,17 @@ export default function CampaignDetailPage() {
       {/* Tab Content */}
       {activeTab === "overview" && (
         <div className="grid gap-6 lg:grid-cols-2">
+          {campaign.cover_image_url && (
+            <div className="relative h-48 w-full overflow-hidden rounded-xl border border-[#2A2A2A] lg:col-span-2">
+              <Image
+                src={campaign.cover_image_url}
+                alt={campaign.name}
+                fill
+                sizes="(max-width: 1024px) 100vw, 960px"
+                className="object-cover"
+              />
+            </div>
+          )}
           {/* Eligibility rules */}
           <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
             <CardHeader><CardTitle className="text-sm text-white">Eligibility Rules</CardTitle></CardHeader>
