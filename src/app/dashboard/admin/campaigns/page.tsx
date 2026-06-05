@@ -37,6 +37,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Image from "next/image";
 import {
   Table,
   TableBody,
@@ -50,6 +51,7 @@ type Campaign = {
   id: string;
   name: string;
   description: string | null;
+  cover_image_url: string | null;
   campaign_type: string;
   status: string;
   start_date: string;
@@ -615,11 +617,22 @@ export default function AdminCampaignsPage() {
                   return (
                     <TableRow key={c.id} className="border-[#2A2A2A]">
                       <TableCell>
-                        <div>
-                          <p className="font-semibold text-white">{c.name}</p>
-                          <p className="mt-0.5 max-w-xs truncate text-xs text-white/40">
-                            {c.description || "No description"}
-                          </p>
+                        <div className="flex items-center gap-3">
+                          {c.cover_image_url ? (
+                            <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-md border border-[#2A2A2A]">
+                              <Image src={c.cover_image_url} alt={c.name} fill sizes="64px" className="object-cover" />
+                            </div>
+                          ) : (
+                            <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded-md border border-[#2A2A2A] bg-[#0D0D0D]">
+                              <Megaphone className="h-4 w-4 text-white/20" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold text-white">{c.name}</p>
+                            <p className="mt-0.5 max-w-xs truncate text-xs text-white/40">
+                              {c.description || "No description"}
+                            </p>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
