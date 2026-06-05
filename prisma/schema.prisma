@@ -300,6 +300,7 @@ model Campaign {
   id                      String   @id @default(uuid()) @db.Uuid
   name                    String
   description             String?
+  coverImageUrl           String?
   campaignType            String   @db.VarChar(50)
   status                  String   @default("draft") @db.VarChar(50)
   startDate               DateTime
