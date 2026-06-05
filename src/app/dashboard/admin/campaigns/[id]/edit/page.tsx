@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import CampaignCoverUpload from "@/components/campaign-wizard/campaign-cover-upload";
 
 type CampaignItemData = {
   id?: string;
@@ -52,6 +53,7 @@ export default function EditCampaignPage() {
   const [targetAudience, setTargetAudience] = useState("all");
   const [targetDealerGroup, setTargetDealerGroup] = useState("");
   const [campaignStatus, setCampaignStatus] = useState("");
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
 
   // Eligibility
   const [minCreditLimit, setMinCreditLimit] = useState("");
@@ -79,6 +81,7 @@ export default function EditCampaignPage() {
         setTargetAudience(c.target_audience || "all");
         setTargetDealerGroup(c.target_dealer_group || "");
         setCampaignStatus(c.status || "");
+        setCoverUrl(c.cover_image_url ?? null);
 
         const rules = c.eligibility_rules || {};
         setMinCreditLimit(rules.min_credit_limit?.toString() || "");
@@ -272,6 +275,17 @@ export default function EditCampaignPage() {
               <input type="date" className={fieldClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Cover Image */}
+      <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+        <CardHeader><CardTitle className="text-sm text-white">Cover Image</CardTitle></CardHeader>
+        <CardContent>
+          <p className="mb-2 text-[11px] text-white/30">
+            Optional. Changes are saved immediately. Shown to dealers on campaign cards and the dashboard banner.
+          </p>
+          <CampaignCoverUpload campaignId={campaignId} initialUrl={coverUrl} />
         </CardContent>
       </Card>
 
